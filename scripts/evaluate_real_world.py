@@ -17,9 +17,10 @@ ieee300 : IEEE 300-bus power transmission network (300 nodes, ~411 edges).
           Slightly larger than the BA training graphs (30-50 nodes) — tests
           whether the GNN generalises to larger, denser real infrastructure.
 
-usair   : US domestic air traffic network (OpenFlights, ~300-400 nodes).
-          Scale-free-like hub structure (major hubs = high-degree nodes),
-          but with real geographic and operational constraints absent in BA.
+watts_strogatz : Watts-Strogatz small-world graph (n=300, k=4, p=0.1, seed=42).
+          High clustering + short path lengths — structurally distinct from
+          both BA (scale-free) and IEEE 300-bus (sparse tree-like).
+          Reference: Watts & Strogatz (1998), Nature 393:440-442.
 
 Method
 ------
@@ -91,8 +92,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--datasets",
         nargs="+",
-        default=["ieee300", "usair"],
-        help="Which real-world datasets to evaluate (default: ieee300 usair).",
+        default=["ieee300", "watts_strogatz"],
+        help="Which datasets to evaluate (default: ieee300 watts_strogatz).",
     )
     parser.add_argument(
         "--seeds",

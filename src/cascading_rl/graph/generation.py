@@ -99,7 +99,7 @@ def load_real_world_graph(name: str, data_dir: Path | str | None = None) -> nx.G
     """
     filenames = {
         "ieee300": "ieee300_edges.csv",
-        "usair": "usair_edges.csv",
+        "watts_strogatz": "watts_strogatz_edges.csv",
     }
     if name not in filenames:
         raise ValueError(f"Unknown real-world graph '{name}'. Choose from: {list(filenames)}")

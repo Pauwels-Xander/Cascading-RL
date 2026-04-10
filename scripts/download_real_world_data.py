@@ -11,20 +11,19 @@ ieee300
     benchmark repository). Source: https://github.com/power-grid-lib/pglib-opf
     File: pglib_opf_case300_ieee.m (MATPOWER format, plain text).
     License: Creative Commons Attribution 4.0 (CC-BY 4.0).
+    Reference: Babaeinejadsarookolaee et al. (2019), arXiv:1908.02788.
 
-usair
-    US domestic airport route network derived from OpenFlights.org open data.
-    Airports: https://raw.githubusercontent.com/jpatokal/openflights/master/data/airports.dat
-    Routes:   https://raw.githubusercontent.com/jpatokal/openflights/master/data/routes.dat
-    License: OpenFlights data is provided under the Open Database Licence (ODbL).
+watts_strogatz
+    Watts-Strogatz small-world graph (n=300, k=4, p=0.1, seed=42).
+    Generated deterministically via NetworkX — no download required.
+    Reference: Watts & Strogatz (1998), Nature 393:440-442.
 
-Both datasets are saved as simple edge-list CSV files under data/processed/.
+Saved as edge-list CSV files under data/processed/.
 """
 
 from __future__ import annotations
 
 import csv
-import io
 import re
 import sys
 import urllib.request
@@ -50,7 +49,6 @@ IEEE300_OUT = PROCESSED_DIR / "ieee300_edges.csv"
 def _download(url: str) -> str:
     import subprocess
     print(f"  Downloading {url} ...", flush=True)
-    # Use system curl — avoids macOS Python SSL certificate issues entirely.
     result = subprocess.run(
         ["curl", "-fsSL", "--max-time", "30", url],
         capture_output=True,
@@ -89,7 +87,6 @@ def parse_ieee300(matpower_text: str) -> list[tuple[int, int]]:
                 except ValueError:
                     continue
 
-    # Re-index bus numbers to 0..N-1
     all_buses = sorted({b for edge in raw_edges for b in edge})
     bus_to_idx = {bus: idx for idx, bus in enumerate(all_buses)}
     edges = list(dict.fromkeys(
@@ -118,86 +115,27 @@ def download_ieee300() -> None:
 
 
 # ---------------------------------------------------------------------------
-# US Air Traffic (OpenFlights)
+# Watts-Strogatz small-world (generated, no download needed)
 # ---------------------------------------------------------------------------
-AIRPORTS_URL = (
-    "https://raw.githubusercontent.com/jpatokal/openflights/master/data/airports.dat"
-)
-ROUTES_URL = (
-    "https://raw.githubusercontent.com/jpatokal/openflights/master/data/routes.dat"
-)
-USAIR_OUT = PROCESSED_DIR / "usair_edges.csv"
-
-# FAA country code for US airports
-_US_COUNTRY = "United States"
+WS_OUT = PROCESSED_DIR / "watts_strogatz_edges.csv"
+WS_N = 300
+WS_K = 4
+WS_P = 0.1
+WS_SEED = 42
 
 
-def _parse_airports(text: str) -> dict[str, int]:
-    """Return {IATA_code: node_index} for US airports with valid IATA codes."""
-    us_airports: list[str] = []
-    reader = csv.reader(io.StringIO(text))
-    for row in reader:
-        if len(row) < 8:
-            continue
-        country = row[3].strip().strip('"')
-        iata = row[4].strip().strip('"')
-        if country == _US_COUNTRY and len(iata) == 3 and iata != "\\N":
-            us_airports.append(iata)
-    # Stable sort → deterministic node indices
-    us_airports = sorted(set(us_airports))
-    return {code: idx for idx, code in enumerate(us_airports)}
-
-
-def _parse_routes(text: str, airport_index: dict[str, int]) -> list[tuple[int, int]]:
-    """Return undirected edges between US airports."""
-    edges: set[tuple[int, int]] = set()
-    reader = csv.reader(io.StringIO(text))
-    for row in reader:
-        if len(row) < 5:
-            continue
-        src_iata = row[2].strip().strip('"')
-        dst_iata = row[4].strip().strip('"')
-        if src_iata in airport_index and dst_iata in airport_index:
-            u = airport_index[src_iata]
-            v = airport_index[dst_iata]
-            if u != v:
-                edges.add((min(u, v), max(u, v)))
-    return sorted(edges)
-
-
-def download_usair() -> None:
+def generate_watts_strogatz() -> None:
     import networkx as nx
-
-    print("US Air Traffic (OpenFlights):")
-    airports_text = _download(AIRPORTS_URL)
-    routes_text = _download(ROUTES_URL)
-    airport_index = _parse_airports(airports_text)
-    edges = _parse_routes(routes_text, airport_index)
-    if not edges:
-        raise RuntimeError(
-            "No US air routes parsed. Check that the OpenFlights URLs are still valid."
-        )
-
-    # Keep only the largest connected component
-    g = nx.Graph()
-    g.add_nodes_from(range(len(airport_index)))
-    g.add_edges_from(edges)
-    largest_cc = max(nx.connected_components(g), key=len)
-    sub = g.subgraph(largest_cc).copy()
-    # Re-index nodes 0..N-1
-    mapping = {old: new for new, old in enumerate(sorted(largest_cc))}
-    edges_out = sorted(
-        (min(mapping[u], mapping[v]), max(mapping[u], mapping[v]))
-        for u, v in sub.edges()
-    )
-    num_nodes = len(largest_cc)
-
+    print(f"Watts-Strogatz small-world (n={WS_N}, k={WS_K}, p={WS_P}, seed={WS_SEED}):")
+    g = nx.watts_strogatz_graph(n=WS_N, k=WS_K, p=WS_P, seed=WS_SEED)
+    edges = sorted((min(u, v), max(u, v)) for u, v in g.edges())
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
-    with USAIR_OUT.open("w", newline="") as f:
+    with WS_OUT.open("w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["from", "to"])
-        writer.writerows(edges_out)
-    print(f"  Saved {len(edges_out)} edges, {num_nodes} nodes -> {USAIR_OUT}")
+        writer.writerows(edges)
+    avg_degree = 2 * len(edges) / WS_N
+    print(f"  Generated {len(edges)} edges, {WS_N} nodes, avg_degree={avg_degree:.2f} -> {WS_OUT}")
 
 
 # ---------------------------------------------------------------------------
@@ -205,7 +143,7 @@ def download_usair() -> None:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    print("Downloading real-world network datasets...\n")
+    print("Setting up network datasets...\n")
     try:
         download_ieee300()
     except Exception as exc:
@@ -213,7 +151,7 @@ def main() -> None:
 
     print()
     try:
-        download_usair()
+        generate_watts_strogatz()
     except Exception as exc:
         print(f"  ERROR: {exc}", file=sys.stderr)
 

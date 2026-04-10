@@ -14,8 +14,8 @@ This produces:
 
 | File | Dataset | Nodes | Edges | Source |
 |------|---------|-------|-------|--------|
-| `processed/ieee300_edges.csv` | IEEE 300-bus power grid | 300 | ~411 | PGLIB-OPF (CC-BY 4.0) |
-| `processed/usair_edges.csv` | US air traffic (OpenFlights) | ~300-400 | varies | OpenFlights (ODbL) |
+| `processed/ieee300_edges.csv` | IEEE 300-bus power grid | 300 | ~409 | PGLIB-OPF (CC-BY 4.0) |
+| `processed/watts_strogatz_edges.csv` | Watts-Strogatz small-world | 300 | 600 | Generated via NetworkX |
 
 ## Notes on the cascade model
 
