@@ -43,3 +43,6 @@ experiments/regime_comprehensive_smoke/
 
 # Large regime mapping outputs (regenerate with scripts/map_regime*.py)
 experiments/regime_map/regime_results.json
+
+# Real-world datasets (downloaded by scripts/download_real_world_data.py)
+data/processed/

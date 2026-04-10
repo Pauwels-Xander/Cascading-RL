@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import csv
 from collections.abc import Iterable
+from pathlib import Path
 from random import Random
 
 import networkx as nx
@@ -77,6 +79,62 @@ def make_graph_batch(
         graph.graph["graph_index"] = graph_index
         graphs.append(graph)
     return graphs
+
+
+def load_real_world_graph(name: str, data_dir: Path | str | None = None) -> nx.Graph:
+    """Load a pre-downloaded real-world network from data/processed/.
+
+    Parameters
+    ----------
+    name : "ieee300" or "usair"
+        Which dataset to load.
+    data_dir : path to the data/processed/ directory. Defaults to the repo's
+        data/processed/ folder resolved relative to this file.
+
+    Returns
+    -------
+    A connected, undirected NetworkX graph with 0-indexed integer nodes.
+    Raises FileNotFoundError if the CSV has not been downloaded yet —
+    run scripts/download_real_world_data.py first.
+    """
+    filenames = {
+        "ieee300": "ieee300_edges.csv",
+        "usair": "usair_edges.csv",
+    }
+    if name not in filenames:
+        raise ValueError(f"Unknown real-world graph '{name}'. Choose from: {list(filenames)}")
+
+    if data_dir is None:
+        # Resolve relative to this file: src/cascading_rl/graph/ -> repo root -> data/processed/
+        data_dir = Path(__file__).resolve().parents[3] / "data" / "processed"
+    csv_path = Path(data_dir) / filenames[name]
+
+    if not csv_path.is_file():
+        raise FileNotFoundError(
+            f"Real-world graph file not found: {csv_path}\n"
+            "Run:  python scripts/download_real_world_data.py"
+        )
+
+    edges: list[tuple[int, int]] = []
+    with csv_path.open("r", newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            u, v = int(row["from"]), int(row["to"])
+            if u != v:
+                edges.append((u, v))
+
+    g = nx.Graph()
+    g.add_edges_from(edges)
+
+    # Ensure connectivity — keep largest component and re-index 0..N-1
+    if not nx.is_connected(g):
+        largest_cc = max(nx.connected_components(g), key=len)
+        g = g.subgraph(largest_cc).copy()
+        mapping = {old: new for new, old in enumerate(sorted(g.nodes()))}
+        g = nx.relabel_nodes(g, mapping)
+
+    g.graph["name"] = name
+    return g
 
 
 def relabel_graph_with_prefix(graph: nx.Graph, prefix: str) -> nx.Graph:
