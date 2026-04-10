@@ -17,7 +17,7 @@ from torch.optim import Adam
 from cascading_rl.budgeting import compute_scaled_budget, compute_scaled_max_rounds
 from cascading_rl.envs.recovery import RecoveryEnv, RecoveryObservation
 from cascading_rl.evaluation import evaluate_policy_factories_on_graphs
-from cascading_rl.graph.generation import make_ba_graph, make_graph_batch
+from cascading_rl.graph.generation import make_ba_graph, make_er_graph, make_graph_batch
 from cascading_rl.models import (
     FEATURE_NAMES,
     GLOBAL_FEATURE_NAMES,
@@ -57,8 +57,10 @@ class TrainingConfig:
     action_space: str = "failed"
     obs_hops: int | None = None
     abandonment_nc_threshold: float | None = None
+    homogenize_reward: bool = True
     n_range: tuple[int, int] = (30, 50)
     m: int = 2
+    graph_type: str = "ba"
     num_episodes: int = 10000
     replay_capacity: int = 10000
     warmup_transitions: int = 500
@@ -93,7 +95,9 @@ class TrainingConfig:
     # Diagnostics: log PR(degree)-PR(random) per episode; optional JSON/YAML eval set path.
     log_episode_spread: bool = False
     log_grad_norm: bool = False
-    validation_eval_set_path: str | None = None
+    # Fixed eval set for stable, comparable validation curves across runs.
+    # Regenerate with: python scripts/generate_eval_set.py
+    validation_eval_set_path: str | None = "eval_sets/ds_validation.pkl"
 
 
 @dataclass
@@ -330,6 +334,7 @@ def _env_kwargs_from_config(config: TrainingConfig) -> dict[str, Any]:
         "action_space": config.action_space,
         "obs_hops": config.obs_hops,
         "abandonment_nc_threshold": config.abandonment_nc_threshold,
+        "homogenize_reward": config.homogenize_reward,
     }
 
 
@@ -747,6 +752,7 @@ def train_recovery_agent(config: TrainingConfig) -> tuple[RecoveryQNetwork, Trai
         n_range=config.n_range,
         m=config.m,
         seed=config.validation_seed,
+        graph_type=config.graph_type,
     )
     eval_set_instances: list[Mapping[str, Any]] | None = None
     if config.validation_eval_set_path:
@@ -838,9 +844,10 @@ def train_recovery_agent(config: TrainingConfig) -> tuple[RecoveryQNetwork, Trai
             rng.shuffle(regime_combinations)
         alpha, pfail = regime_combinations[cycle_index]
 
+        _make_graph = make_er_graph if config.graph_type == "er" else make_ba_graph
         if resolved_specs is not None:
             n, graph_seed = resolved_specs[episode % len(resolved_specs)]
-            graph = make_ba_graph(n=n, m=config.m, seed=graph_seed)
+            graph = _make_graph(n=n, m=config.m, seed=graph_seed)
             resolved_budget = _resolve_budget_for_graph(config, graph)
             resolved_max_rounds = _resolve_max_rounds_for_graph(config, graph)
             env = RecoveryEnv(
@@ -858,7 +865,7 @@ def train_recovery_agent(config: TrainingConfig) -> tuple[RecoveryQNetwork, Trai
             if not graph_buffer or rng.random() < 0.3:
                 graph_size = rng.randint(config.n_range[0], config.n_range[1])
                 graph_struct_seed = rng.randint(0, 10**9)
-                graph = make_ba_graph(n=graph_size, m=config.m, seed=graph_struct_seed)
+                graph = _make_graph(n=graph_size, m=config.m, seed=graph_struct_seed)
                 graph_buffer.append(graph)
             else:
                 graph = rng.choice(list(graph_buffer))

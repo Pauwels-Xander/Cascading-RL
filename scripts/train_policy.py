@@ -104,8 +104,10 @@ def build_training_config(config: dict[str, Any], *, episodes_override: int | No
         abandonment_nc_threshold=(
             float(abandon_raw) if abandon_raw is not None else None
         ),
+        homogenize_reward=bool(regime.get("homogenize_reward", defaults.homogenize_reward)),
         n_range=tuple(graph["n_range"]),
         m=int(graph["m"]),
+        graph_type=str(graph.get("graph_type", defaults.graph_type)),
         num_episodes=num_episodes,
         replay_capacity=int(training["replay_capacity"]),
         warmup_transitions=int(training["warmup_transitions"]),
@@ -223,6 +225,11 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Override validation interval (episodes).",
     )
+    parser.add_argument(
+        "--no-homogenize-reward",
+        action="store_true",
+        help="Ablation: use per-step NC-gain reward instead of homogenized round-level reward.",
+    )
     return parser.parse_args()
 
 
@@ -257,6 +264,8 @@ def main() -> None:
         training_config = replace(
             training_config, validation_every=int(args.validation_every)
         )
+    if args.no_homogenize_reward:
+        training_config = replace(training_config, homogenize_reward=False)
     if args.checkpoint_dir is not None:
         training_config = replace(training_config, checkpoint_dir=args.checkpoint_dir)
 

@@ -133,6 +133,7 @@ class RecoveryEnv:
         action_space: str = "failed",
         obs_hops: int | None = None,
         abandonment_nc_threshold: float | None = None,
+        homogenize_reward: bool = True,
     ) -> None:
         if budget < 1:
             raise ValueError("budget must be at least 1.")
@@ -161,6 +162,7 @@ class RecoveryEnv:
             else None
         )
         self._rng = Random(seed if seed is not None else 0)
+        self.homogenize_reward = homogenize_reward
         self.state: CascadeState | None = None
         self.remaining_budget = budget
         self.current_round = 1
@@ -170,6 +172,7 @@ class RecoveryEnv:
         # structurally meaningful signal per round (the full cascade-inclusive delta),
         # preventing the mixed-target problem caused by the reward asymmetry between
         # intra-round steps (b < B, no cascade) and last steps (b = B, cascade fires).
+        # Only active when homogenize_reward=True (default). Set to False for ablation.
         self._round_start_nc: float = 0.0
 
     def reset(self, seed: int | None = None) -> RecoveryObservation:
@@ -237,6 +240,7 @@ class RecoveryEnv:
 
         action_round = self.current_round
         action_index_in_round = self.budget - self.remaining_budget + 1
+        nc_before_action = normalized_connectivity(self.state.graph, self.state.active)
         self.state = reactivate_node(self.state, action)
         self.remaining_budget -= 1
 
@@ -251,21 +255,29 @@ class RecoveryEnv:
 
         nc_after_cascade = normalized_connectivity(self.state.graph, self.state.active)
 
-        # Homogenised reward: zero for all intra-round steps (b < B), full
-        # round-level delta NC for the last step (b = B) only. This ensures
-        # every transition in the replay buffer carries rewards of the same
-        # structural type: either 0 (no cascade yet) or the complete cascade-
-        # inclusive delta relative to the start of the round. Without this,
-        # the last step absorbs the entire cascade penalty while earlier steps
-        # receive only small repair gains, creating conflicting Bellman targets
-        # for states that are indistinguishable without budget_coverage.
-        # The total episode reward (sum over all steps) equals the cumulative
-        # NC gain over rounds, identical to step_batch semantics.
-        if round_complete:
-            reward = nc_after_cascade - self._round_start_nc
-            self._round_start_nc = nc_after_cascade
+        # Reward computation: two modes controlled by homogenize_reward.
+        #
+        # homogenize_reward=True (default): zero for all intra-round steps (b < B),
+        # full round-level delta NC for the last step (b = B) only. Every transition
+        # in the replay buffer carries the same structural type of reward, preventing
+        # mixed Bellman targets caused by the asymmetry between intra-round steps
+        # (no cascade) and last steps (cascade fires).
+        #
+        # homogenize_reward=False (ablation): per-step NC gain at every step.
+        # reward = NC_after_cascade - NC_before_action. For intra-round steps
+        # nc_after_cascade == nc_after_reactivation (no cascade fired), so reward
+        # equals the repair gain only. For the last step it includes cascade effects.
+        # Denser signal, but introduces mixed Bellman targets.
+        if self.homogenize_reward:
+            if round_complete:
+                reward = nc_after_cascade - self._round_start_nc
+                self._round_start_nc = nc_after_cascade
+            else:
+                reward = 0.0
         else:
-            reward = 0.0
+            reward = nc_after_cascade - nc_before_action
+            if round_complete:
+                self._round_start_nc = nc_after_cascade
 
         exhausted_rounds = action_round >= self.max_rounds
         abandoned = self._abandon_due_to_low_nc(nc_after_cascade)

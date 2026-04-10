@@ -1,6 +1,8 @@
 graph:
   n_range: [30, 50]
   m: 2
+  # Graph family: "ba" (Barabasi-Albert, default) or "er" (Erdos-Renyi, same avg degree).
+  graph_type: ba
 
 budget_scaling:
   enabled: true
@@ -44,6 +46,9 @@ training:
     action_space: failed
     obs_hops: null
     abandonment_nc_threshold: null
+    # Reward structure: true = homogenized (0 intra-round, full delta on last step).
+    # Set to false for the per-step NC-gain ablation (denser signal, mixed Bellman targets).
+    homogenize_reward: true
   graph:
     n_range: [30, 50]
     m: 2
