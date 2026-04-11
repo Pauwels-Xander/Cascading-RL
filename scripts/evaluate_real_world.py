@@ -56,6 +56,7 @@ from cascading_rl.evaluation.benchmarks import (
     build_policy_factories,
     collect_matched_episodes,
     compare_all_pairs,
+    fmt_policy_summary,
     summarize_episode_results,
 )
 from cascading_rl.graph.generation import load_real_world_graph
@@ -129,15 +130,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def _fmt_summary(summary) -> dict:
-    return {
-        "anc_fixed_mean": round(summary.anc_fixed.mean, 4),
-        "anc_fixed_stderr": round(summary.anc_fixed.stderr, 4),
-        "final_nc_mean": round(summary.final_nc.mean, 4),
-        "final_nc_stderr": round(summary.final_nc.stderr, 4),
-        "solved_fraction_mean": round(summary.solved_fraction.mean, 4),
-        "rounds_mean": round(summary.rounds.mean, 2),
-        "episode_count": summary.episode_count,
-    }
+    return fmt_policy_summary(summary)
 
 
 def evaluate_dataset(
@@ -258,19 +251,21 @@ def evaluate_dataset(
     with summary_path.open("w", encoding="utf-8") as f:
         json.dump(result, f, indent=2)
 
-    # Print table
-    print(f"\n  {'Policy':<14} {'ANC-fixed':>10} {'±stderr':>8} {'Solved':>8} {'Rounds':>7}")
-    print(f"  {'-'*50}")
+    # Print full results table
+    print(f"\n  {'Policy':<14} {'ANC-fix':>8} {'±se':>6} {'ANC-adp':>8} {'FinalNC':>8} "
+          f"{'Solved':>7} {'Rounds':>7} {'ActRank':>8} {'NCgain':>8}")
+    print(f"  {'-'*76}")
     policy_order = ["rl", "greedy", "degree", "betweenness", "risk", "random"]
     for name in policy_order:
         if name not in summaries:
             continue
         s = summaries[name]
+        rws = f"{s.rounds_when_solved.mean:.1f}" if s.rounds_when_solved is not None else "  n/a"
         print(
-            f"  {name:<14} {s.anc_fixed.mean:>10.3f} "
-            f"{s.anc_fixed.stderr:>8.3f} "
-            f"{s.solved_fraction.mean:>8.3f} "
-            f"{s.rounds.mean:>7.1f}"
+            f"  {name:<14} {s.anc_fixed.mean:>8.3f} {s.anc_fixed.stderr:>6.3f} "
+            f"{s.anc_adaptive.mean:>8.3f} {s.final_nc.mean:>8.3f} "
+            f"{s.solved_fraction.mean:>7.3f} {rws:>7} "
+            f"{s.mean_action_rank.mean:>8.2f} {s.mean_nc_gain.mean:>8.4f}"
         )
 
     print(f"\n  Saved -> {summary_path}")

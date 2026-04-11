@@ -39,6 +39,7 @@ from cascading_rl.evaluation.benchmarks import (
     build_policy_factories,
     collect_matched_episodes,
     compare_all_pairs,
+    fmt_policy_summary,
     summarize_episode_results,
 )
 from cascading_rl.graph.generation import make_ba_graph
@@ -103,15 +104,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def _fmt(summary) -> dict:
-    return {
-        "anc_fixed_mean": round(summary.anc_fixed.mean, 4),
-        "anc_fixed_stderr": round(summary.anc_fixed.stderr, 4),
-        "final_nc_mean": round(summary.final_nc.mean, 4),
-        "final_nc_stderr": round(summary.final_nc.stderr, 4),
-        "solved_fraction_mean": round(summary.solved_fraction.mean, 4),
-        "rounds_mean": round(summary.rounds.mean, 2),
-        "episode_count": summary.episode_count,
-    }
+    return fmt_policy_summary(summary)
 
 
 def run_size(

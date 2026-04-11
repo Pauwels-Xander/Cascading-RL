@@ -46,6 +46,7 @@ from cascading_rl.evaluation.benchmarks import (
     build_policy_factories,
     collect_matched_episodes,
     compare_all_pairs,
+    fmt_policy_summary,
     summarize_episode_results,
 )
 from cascading_rl.graph.generation import make_graph_batch
@@ -104,6 +105,15 @@ def parse_args() -> argparse.Namespace:
         default=list(range(10)),
         help="Failure seeds per graph (default: 0..9).",
     )
+    parser.add_argument("--alpha", type=float, default=None,
+                        help="Capacity slack override (default: from config).")
+    parser.add_argument("--pfail", type=float, default=None,
+                        help="Failure rate override (default: from config).")
+    parser.add_argument("--budget", type=int, default=None,
+                        help="Recovery budget override (default: from config).")
+    parser.add_argument("--n-range", type=int, nargs=2, default=[30, 50],
+                        metavar=("N_LOW", "N_HIGH"),
+                        help="Graph size range for all topologies (default: 30 50).")
     parser.add_argument(
         "--output-dir",
         type=Path,
@@ -113,15 +123,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def _fmt_summary(summary) -> dict:
-    return {
-        "anc_fixed_mean": round(summary.anc_fixed.mean, 4),
-        "anc_fixed_stderr": round(summary.anc_fixed.stderr, 4),
-        "final_nc_mean": round(summary.final_nc.mean, 4),
-        "final_nc_stderr": round(summary.final_nc.stderr, 4),
-        "solved_fraction_mean": round(summary.solved_fraction.mean, 4),
-        "rounds_mean": round(summary.rounds.mean, 2),
-        "episode_count": summary.episode_count,
-    }
+    return fmt_policy_summary(summary)
 
 
 def run_topology(
@@ -192,18 +194,22 @@ def run_topology(
         rng=__import__("random").Random(0),
     )
 
-    # Print table
-    print(f"\n  {'Policy':<14} {'ANC-fixed':>10} {'±stderr':>8} {'Solved':>8} {'Rounds':>7}")
-    print(f"  {'-'*50}")
+    # Print regime + full results table
+    print(f"  Regime: alpha={alpha}  pfail={pfail}  budget={budget}  max_rounds={max_rounds}")
+    print(f"  n_range={n_range}  m={m}  scale_budget={scale_budget}  reference_n={reference_n}")
+    print(f"\n  {'Policy':<14} {'ANC-fix':>8} {'±se':>6} {'ANC-adp':>8} {'FinalNC':>8} "
+          f"{'Solved':>7} {'Rounds':>7} {'ActRank':>8} {'NCgain':>8}")
+    print(f"  {'-'*76}")
     for name in POLICY_ORDER:
         if name not in summaries:
             continue
         s = summaries[name]
+        rws = f"{s.rounds_when_solved.mean:.1f}" if s.rounds_when_solved is not None else "  n/a"
         print(
-            f"  {name:<14} {s.anc_fixed.mean:>10.3f} "
-            f"{s.anc_fixed.stderr:>8.3f} "
-            f"{s.solved_fraction.mean:>8.3f} "
-            f"{s.rounds.mean:>7.1f}"
+            f"  {name:<14} {s.anc_fixed.mean:>8.3f} {s.anc_fixed.stderr:>6.3f} "
+            f"{s.anc_adaptive.mean:>8.3f} {s.final_nc.mean:>8.3f} "
+            f"{s.solved_fraction.mean:>7.3f} {rws:>7} "
+            f"{s.mean_action_rank.mean:>8.2f} {s.mean_nc_gain.mean:>8.4f}"
         )
 
     return summaries, comparisons
@@ -219,12 +225,12 @@ def main() -> None:
     regime = training["regime"]
     budget_scaling = cfg.get("budget_scaling", {})
 
-    alpha = float(regime["alpha"])
-    pfail = float(regime["pfail"])
-    budget = int(regime["budget"])
+    alpha = args.alpha if args.alpha is not None else float(regime["alpha"])
+    pfail = args.pfail if args.pfail is not None else float(regime["pfail"])
+    budget = args.budget if args.budget is not None else int(regime["budget"])
     max_rounds = int(regime["max_rounds"])
     m = int(training["graph"]["m"])
-    n_range = tuple(training["graph"]["n_range"])
+    n_range = tuple(args.n_range)  # default [30, 50]; overridable via --n-range
     scale_budget = bool(budget_scaling.get("enabled", True))
     scale_max_rounds = bool(budget_scaling.get("scale_max_rounds", True))
     reference_n = int(budget_scaling.get("reference_n", 40))
