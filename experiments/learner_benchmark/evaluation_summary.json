@@ -1,0 +1,357 @@
+{
+  "checkpoint": "experiments/learner/recovery_q.pt",
+  "config": "config/default.yaml",
+  "policies": [
+    "rl",
+    "random",
+    "degree",
+    "risk",
+    "greedy",
+    "betweenness"
+  ],
+  "minimum_budget_solved_target": 0.8,
+  "env_stopping": {
+    "capacity_noise": 0.0,
+    "failure_bias": "uniform",
+    "action_space": "failed",
+    "obs_hops": null,
+    "abandonment_nc_threshold": null
+  },
+  "rl": {
+    "final_nc": {
+      "mean": 0.9730746296798167,
+      "stderr": 0.001855499093291034
+    },
+    "anc_fixed": {
+      "mean": 0.6200461480315215,
+      "stderr": 0.006613061669491206
+    },
+    "anc_adaptive": {
+      "mean": 0.5515425715866288,
+      "stderr": 0.0057306060301214
+    },
+    "rounds": {
+      "mean": 14.015333333333333,
+      "stderr": 0.17993976129048578
+    },
+    "steps": {
+      "mean": 14.015333333333333,
+      "stderr": 0.17993976129048578
+    },
+    "solved_fraction": {
+      "mean": 0.8146666666666667,
+      "stderr": 0.010036121848291887
+    },
+    "rounds_when_solved": {
+      "mean": 12.712765957446809,
+      "stderr": 0.1984081086945438
+    },
+    "fully_restored_count": 1222,
+    "episode_count": 1500,
+    "unsolved_low_final_nc_count": 1,
+    "unsolved_low_final_nc_fraction": 0.0006666666666666666,
+    "mean_degree_ratio": {
+      "mean": 0.545652063230509,
+      "stderr": 0.0022536044653152206
+    },
+    "mean_overload_risk": {
+      "mean": 0.4952300420448601,
+      "stderr": 0.0027667758913880146
+    },
+    "mean_nc_gain": {
+      "mean": 0.02421425323324852,
+      "stderr": 0.0006723207560646508
+    },
+    "mean_greedy_nc_gain": {
+      "mean": -0.00720708620379033,
+      "stderr": 0.0007895796287479629
+    },
+    "mean_action_rank": {
+      "mean": 5.323930932787899,
+      "stderr": 0.037382218711864076
+    },
+    "b_star": 2
+  },
+  "random": {
+    "final_nc": {
+      "mean": 0.7121698108938009,
+      "stderr": 0.004246265031913536
+    },
+    "anc_fixed": {
+      "mean": 0.26534323253860104,
+      "stderr": 0.006259436695198592
+    },
+    "anc_adaptive": {
+      "mean": 0.262825377333193,
+      "stderr": 0.0060723139705412855
+    },
+    "rounds": {
+      "mean": 18.566666666666666,
+      "stderr": 0.15988979601051018
+    },
+    "steps": {
+      "mean": 37.06466666666667,
+      "stderr": 0.3245459888532522
+    },
+    "solved_fraction": {
+      "mean": 0.09733333333333333,
+      "stderr": 0.007655854738579
+    },
+    "rounds_when_solved": {
+      "mean": 2.041095890410959,
+      "stderr": 0.12631049922074258
+    },
+    "fully_restored_count": 146,
+    "episode_count": 1500,
+    "unsolved_low_final_nc_count": 35,
+    "unsolved_low_final_nc_fraction": 0.023333333333333334,
+    "mean_degree_ratio": {
+      "mean": 0.32947286640529366,
+      "stderr": 0.0010803065276040035
+    },
+    "mean_overload_risk": {
+      "mean": 0.1304026480746381,
+      "stderr": 0.0012809612065082096
+    },
+    "mean_nc_gain": {
+      "mean": -0.01750739764593604,
+      "stderr": 0.0005205215413823118
+    },
+    "mean_greedy_nc_gain": {
+      "mean": 0.02087715280647408,
+      "stderr": 0.0004326362119107194
+    },
+    "mean_action_rank": {
+      "mean": 12.166969440797166,
+      "stderr": 0.03957620343184459
+    },
+    "b_star": 4
+  },
+  "degree": {
+    "final_nc": {
+      "mean": 0.977804858625046,
+      "stderr": 0.0016183483684418121
+    },
+    "anc_fixed": {
+      "mean": 0.6752645135628054,
+      "stderr": 0.006301963200078925
+    },
+    "anc_adaptive": {
+      "mean": 0.5921654857450324,
+      "stderr": 0.005587273800494534
+    },
+    "rounds": {
+      "mean": 12.980666666666666,
+      "stderr": 0.18620472321465545
+    },
+    "steps": {
+      "mean": 25.524,
+      "stderr": 0.3756261607970307
+    },
+    "solved_fraction": {
+      "mean": 0.8513333333333334,
+      "stderr": 0.009188736647659783
+    },
+    "rounds_when_solved": {
+      "mean": 11.437744714173846,
+      "stderr": 0.18495405944429588
+    },
+    "fully_restored_count": 1277,
+    "episode_count": 1500,
+    "unsolved_low_final_nc_count": 0,
+    "unsolved_low_final_nc_fraction": 0.0,
+    "mean_degree_ratio": {
+      "mean": 1.0,
+      "stderr": 0.0
+    },
+    "mean_overload_risk": {
+      "mean": 0.5295662776230657,
+      "stderr": 0.0019195932524400856
+    },
+    "mean_nc_gain": {
+      "mean": -0.01716288634965627,
+      "stderr": 0.0005541013656937781
+    },
+    "mean_greedy_nc_gain": {
+      "mean": -0.011288654008377525,
+      "stderr": 0.0005146434753963914
+    },
+    "mean_action_rank": {
+      "mean": 6.901138797471661,
+      "stderr": 0.034223854442950126
+    },
+    "b_star": 2
+  },
+  "risk": {
+    "final_nc": {
+      "mean": 0.8196866296778853,
+      "stderr": 0.003965615896094285
+    },
+    "anc_fixed": {
+      "mean": 0.3667966177251487,
+      "stderr": 0.006855434316521549
+    },
+    "anc_adaptive": {
+      "mean": 0.3554339402564962,
+      "stderr": 0.006405823755791133
+    },
+    "rounds": {
+      "mean": 17.792666666666666,
+      "stderr": 0.17440711771586268
+    },
+    "steps": {
+      "mean": 35.43266666666667,
+      "stderr": 0.354440178995342
+    },
+    "solved_fraction": {
+      "mean": 0.268,
+      "stderr": 0.011439897180409107
+    },
+    "rounds_when_solved": {
+      "mean": 10.296019900497512,
+      "stderr": 0.4083453276037989
+    },
+    "fully_restored_count": 402,
+    "episode_count": 1500,
+    "unsolved_low_final_nc_count": 4,
+    "unsolved_low_final_nc_fraction": 0.0026666666666666666,
+    "mean_degree_ratio": {
+      "mean": 0.3930484267762005,
+      "stderr": 0.0011882126894566533
+    },
+    "mean_overload_risk": {
+      "mean": 0.3175881445731587,
+      "stderr": 0.0017680329066652055
+    },
+    "mean_nc_gain": {
+      "mean": -0.016686311520332276,
+      "stderr": 0.0005266477786677262
+    },
+    "mean_greedy_nc_gain": {
+      "mean": 0.013830997549989149,
+      "stderr": 0.00043437372112555114
+    },
+    "mean_action_rank": {
+      "mean": 12.210483734407044,
+      "stderr": 0.04135345391261029
+    },
+    "b_star": 4
+  },
+  "greedy": {
+    "final_nc": {
+      "mean": 0.9995351341383953,
+      "stderr": 0.00016432266145376942
+    },
+    "anc_fixed": {
+      "mean": 0.7800694619392378,
+      "stderr": 0.004700079853659561
+    },
+    "anc_adaptive": {
+      "mean": 0.666137134937958,
+      "stderr": 0.004708200952465754
+    },
+    "rounds": {
+      "mean": 10.535333333333334,
+      "stderr": 0.15890038995018627
+    },
+    "steps": {
+      "mean": 10.535333333333334,
+      "stderr": 0.15890038995018627
+    },
+    "solved_fraction": {
+      "mean": 0.9926666666666667,
+      "stderr": 0.0022036956580721336
+    },
+    "rounds_when_solved": {
+      "mean": 10.438549361987912,
+      "stderr": 0.15734102851605158
+    },
+    "fully_restored_count": 1489,
+    "episode_count": 1500,
+    "unsolved_low_final_nc_count": 0,
+    "unsolved_low_final_nc_fraction": 0.0,
+    "mean_degree_ratio": {
+      "mean": 0.6093505451129552,
+      "stderr": 0.0023709998698841547
+    },
+    "mean_overload_risk": {
+      "mean": 0.5584452963396866,
+      "stderr": 0.0031287306211309454
+    },
+    "mean_nc_gain": {
+      "mean": 0.03472422972919393,
+      "stderr": 0.000673849272879101
+    },
+    "mean_greedy_nc_gain": {
+      "mean": -0.024425057402244484,
+      "stderr": 0.0009808260448184519
+    },
+    "mean_action_rank": {
+      "mean": 1.7653610074036574,
+      "stderr": 0.023307217935799728
+    },
+    "b_star": 2
+  },
+  "betweenness": {
+    "final_nc": {
+      "mean": 0.9715837634455026,
+      "stderr": 0.0018185724488639303
+    },
+    "anc_fixed": {
+      "mean": 0.6602801603581383,
+      "stderr": 0.006477337019298995
+    },
+    "anc_adaptive": {
+      "mean": 0.5815141166005707,
+      "stderr": 0.005699410212995313
+    },
+    "rounds": {
+      "mean": 13.276666666666667,
+      "stderr": 0.18695526706931886
+    },
+    "steps": {
+      "mean": 26.111333333333334,
+      "stderr": 0.37771382991141905
+    },
+    "solved_fraction": {
+      "mean": 0.8153333333333334,
+      "stderr": 0.010022153209892954
+    },
+    "rounds_when_solved": {
+      "mean": 11.388389206868357,
+      "stderr": 0.1875807915733688
+    },
+    "fully_restored_count": 1223,
+    "episode_count": 1500,
+    "unsolved_low_final_nc_count": 0,
+    "unsolved_low_final_nc_fraction": 0.0,
+    "mean_degree_ratio": {
+      "mean": 0.9468059628601599,
+      "stderr": 0.0005777591717392648
+    },
+    "mean_overload_risk": {
+      "mean": 0.5336484668559431,
+      "stderr": 0.0018835170781415563
+    },
+    "mean_nc_gain": {
+      "mean": -0.017294293604610125,
+      "stderr": 0.0005462243243204007
+    },
+    "mean_greedy_nc_gain": {
+      "mean": -0.011197403391065595,
+      "stderr": 0.00050390671136718
+    },
+    "mean_action_rank": {
+      "mean": 5.802793167717722,
+      "stderr": 0.03176886371108895
+    },
+    "b_star": 2
+  },
+  "scaling": {
+    "scale_budget": true,
+    "scale_max_rounds": false,
+    "reference_budget": 2,
+    "reference_n": 40,
+    "beta": 0.05
+  }
+}
