@@ -1,17 +1,28 @@
 """Run the complete evaluation suite across all parameter combinations.
 
-Three tiers, all driven by the same (alpha, pfail, budget) grid:
+Six tiers, all driven by the same (alpha, pfail, budget) grid:
 
-  Tier 1a — In-distribution param grid  (evaluate_param_generalization.py)
-             Accepts the full grid as lists and loops internally over all 100
-             cells. One script invocation covers all cells.
-             Output: experiments/eval_param_generalization/
+  Tier 1a — BA 30-50 in-dist param grid  (evaluate_param_generalization.py)
+             Training-distribution graph size and topology. One invocation.
+             Output: experiments/eval_param_generalization/ba_30_50/
 
-  Tier 1b — Topology ablation           (evaluate_topology_ablation.py)
-             BA vs ER vs WS at n~[20,50]. One invocation per cell.
+  Tier 1b — Topology ablation            (evaluate_topology_ablation.py)
+             BA vs ER vs WS at n∈[30,50]. One invocation per cell.
              Output: experiments/eval_topology_ablation/a{alpha}_p{pfail}_b{budget}/
 
-  Tier 2  — OOD real-world              (evaluate_real_world.py)
+  Tier 1c — Large BA param grid          (evaluate_param_generalization.py)
+             BA n∈[100,500] — tests size generalisation. One invocation.
+             Output: experiments/eval_param_generalization/ba_100_500/
+
+  Tier 1d — ER param grid                (evaluate_param_generalization.py)
+             Erdős-Rényi n∈[30,50]. One invocation.
+             Output: experiments/eval_param_generalization/er_30_50/
+
+  Tier 1e — WS param grid                (evaluate_param_generalization.py)
+             Watts-Strogatz n∈[30,50]. One invocation.
+             Output: experiments/eval_param_generalization/ws_30_50/
+
+  Tier 2  — OOD real-world               (evaluate_real_world.py)
              IEEE 300-bus. One invocation per cell.
              Output: experiments/eval_real_world/a{alpha}_p{pfail}_b{budget}/
 
@@ -26,9 +37,12 @@ Usage
 -----
     python scripts/run_full_evaluation.py
     python scripts/run_full_evaluation.py --alpha 0.20 0.25 --pfail 0.15 0.20 --budget 1 2
-    python scripts/run_full_evaluation.py --skip-indist   # skip Tier 1a
-    python scripts/run_full_evaluation.py --skip-topo     # skip Tier 1b
-    python scripts/run_full_evaluation.py --skip-ood      # skip Tier 2
+    python scripts/run_full_evaluation.py --skip-indist    # skip Tier 1a
+    python scripts/run_full_evaluation.py --skip-large-ba  # skip Tier 1c
+    python scripts/run_full_evaluation.py --skip-er        # skip Tier 1d
+    python scripts/run_full_evaluation.py --skip-ws        # skip Tier 1e
+    python scripts/run_full_evaluation.py --skip-topo      # skip Tier 1b
+    python scripts/run_full_evaluation.py --skip-ood       # skip Tier 2
 """
 
 from __future__ import annotations
@@ -60,9 +74,12 @@ def parse_args() -> argparse.Namespace:
                    help="Failure seeds for in-dist and topo ablation (default: 0..9).")
     p.add_argument("--ood-seeds", type=int, nargs="+", default=list(range(20)),
                    help="Failure seeds for OOD real-world (default: 0..19).")
-    p.add_argument("--skip-indist", action="store_true", help="Skip Tier 1a.")
-    p.add_argument("--skip-topo",   action="store_true", help="Skip Tier 1b.")
-    p.add_argument("--skip-ood",    action="store_true", help="Skip Tier 2.")
+    p.add_argument("--skip-indist",   action="store_true", help="Skip Tier 1a  (BA 30-50 in-dist).")
+    p.add_argument("--skip-large-ba", action="store_true", help="Skip Tier 1c  (BA 100-500).")
+    p.add_argument("--skip-er",       action="store_true", help="Skip Tier 1d  (ER 30-50).")
+    p.add_argument("--skip-ws",       action="store_true", help="Skip Tier 1e  (WS 30-50).")
+    p.add_argument("--skip-topo",     action="store_true", help="Skip Tier 1b  (topology ablation).")
+    p.add_argument("--skip-ood",      action="store_true", help="Skip Tier 2   (OOD real-world).")
     return p.parse_args()
 
 
@@ -101,7 +118,7 @@ def main() -> None:
     # ------------------------------------------------------------------
     if not args.skip_indist:
         print(f"\n{'='*60}")
-        print(f"TIER 1a — In-distribution grid ({total_cells} cells, single run)")
+        print(f"TIER 1a — In-distribution param grid: BA n∈[30,50] ({total_cells} cells)")
         print(f"  alpha  = {args.alpha}")
         print(f"  pfail  = {args.pfail}")
         print(f"  budget = {args.budget}")
@@ -110,11 +127,75 @@ def main() -> None:
             "scripts/evaluate_param_generalization.py",
             "--checkpoint", args.checkpoint,
             "--config",     args.config,
+            "--graph-type", "ba",
             "--alpha",      *alpha_str,
             "--pfail",      *pfail_str,
             "--budget",     *budget_str,
             "--num-graphs", str(args.num_graphs),
             "--seeds",      *seeds_str,
+            "--output-dir", ROOT / "experiments" / "eval_param_generalization" / "ba_30_50",
+        ])
+
+    # ------------------------------------------------------------------
+    # Tier 1c: param sweep on large BA graphs (n∈[100,500])
+    # ------------------------------------------------------------------
+    if not args.skip_large_ba:
+        print(f"\n{'='*60}")
+        print(f"TIER 1c — Large BA param grid: BA n∈[100,500] ({total_cells} cells)")
+        print(f"{'='*60}")
+        run([
+            "scripts/evaluate_param_generalization.py",
+            "--checkpoint", args.checkpoint,
+            "--config",     args.config,
+            "--graph-type", "ba",
+            "--n-low",      "100",
+            "--n-high",     "500",
+            "--alpha",      *alpha_str,
+            "--pfail",      *pfail_str,
+            "--budget",     *budget_str,
+            "--num-graphs", str(args.num_graphs),
+            "--seeds",      *seeds_str,
+            "--output-dir", ROOT / "experiments" / "eval_param_generalization" / "ba_100_500",
+        ])
+
+    # ------------------------------------------------------------------
+    # Tier 1d: param sweep on ER graphs (n∈[30,50])
+    # ------------------------------------------------------------------
+    if not args.skip_er:
+        print(f"\n{'='*60}")
+        print(f"TIER 1d — ER param grid: ER n∈[30,50] ({total_cells} cells)")
+        print(f"{'='*60}")
+        run([
+            "scripts/evaluate_param_generalization.py",
+            "--checkpoint", args.checkpoint,
+            "--config",     args.config,
+            "--graph-type", "er",
+            "--alpha",      *alpha_str,
+            "--pfail",      *pfail_str,
+            "--budget",     *budget_str,
+            "--num-graphs", str(args.num_graphs),
+            "--seeds",      *seeds_str,
+            "--output-dir", ROOT / "experiments" / "eval_param_generalization" / "er_30_50",
+        ])
+
+    # ------------------------------------------------------------------
+    # Tier 1e: param sweep on WS graphs (n∈[30,50])
+    # ------------------------------------------------------------------
+    if not args.skip_ws:
+        print(f"\n{'='*60}")
+        print(f"TIER 1e — WS param grid: WS n∈[30,50] ({total_cells} cells)")
+        print(f"{'='*60}")
+        run([
+            "scripts/evaluate_param_generalization.py",
+            "--checkpoint", args.checkpoint,
+            "--config",     args.config,
+            "--graph-type", "ws",
+            "--alpha",      *alpha_str,
+            "--pfail",      *pfail_str,
+            "--budget",     *budget_str,
+            "--num-graphs", str(args.num_graphs),
+            "--seeds",      *seeds_str,
+            "--output-dir", ROOT / "experiments" / "eval_param_generalization" / "ws_30_50",
         ])
 
     # ------------------------------------------------------------------

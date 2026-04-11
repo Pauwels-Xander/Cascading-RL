@@ -1,19 +1,22 @@
 {
-  "generated_at": "2026-04-11T19:35:11.637713+00:00",
-  "script": "scripts/evaluate_topology_ablation.py",
+  "generated_at": "2026-04-11T19:28:18.982046+00:00",
+  "script": "scripts/evaluate_param_generalization.py",
   "argv": [
-    "scripts/evaluate_topology_ablation.py",
-    "--num-graphs",
-    "3",
-    "--seeds",
-    "0",
-    "1",
+    "scripts/evaluate_param_generalization.py",
     "--alpha",
+    "0.20",
     "0.25",
     "--pfail",
-    "0.2",
+    "0.15",
+    "0.20",
     "--budget",
-    "2"
+    "1",
+    "2",
+    "--num-graphs",
+    "5",
+    "--seeds",
+    "0",
+    "1"
   ],
   "config_path": "config/default.yaml",
   "config_sha256": "3e8a0c7a31c608d6457f5f8c80ab5e148752d3d6abd9784acc89205f65386c3c",
@@ -21,5 +24,5 @@
   "python_version": "3.14.3 (v3.14.3:323c59a5e34, Feb  3 2026, 11:41:37) [Clang 16.0.0 (clang-1600.0.26.6)]",
   "platform": "macOS-26.3.1-arm64-arm-64bit-Mach-O",
   "torch_version": "2.11.0",
-  "summary_path": "experiments/eval_topology_ablation/topology_ablation_summary.json"
+  "summary_path": "experiments/eval_param_generalization/param_generalization_summary.json"
 }

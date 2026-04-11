@@ -54,7 +54,7 @@ from cascading_rl.evaluation.benchmarks import (
     fmt_policy_summary,
     summarize_episode_results,
 )
-from cascading_rl.graph.generation import make_ba_graph
+from cascading_rl.graph.generation import make_graph_batch
 from cascading_rl.models import RecoveryQNetwork, build_greedy_policy
 from cascading_rl.reproducibility import portable_artifact_path
 from scripts.reproducibility import write_run_metadata
@@ -93,16 +93,22 @@ def load_checkpoint(path: Path) -> RecoveryQNetwork:
 # CLI
 # ---------------------------------------------------------------------------
 
+_GRAPH_SEEDS = {"ba": 7777, "er": 8888, "ws": 9999}
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Evaluate all policies across (alpha, pfail, budget) on BA graphs n~Uniform[20,50]."
+        description="Evaluate all policies across (alpha, pfail, budget) on a chosen graph type."
     )
     parser.add_argument("--checkpoint", type=Path,
                         default=ROOT / "experiments" / "learner" / "recovery_q.pt")
     parser.add_argument("--config", type=Path,
                         default=ROOT / "config" / "default.yaml")
+    parser.add_argument("--graph-type", type=str, default="ba",
+                        choices=["ba", "er", "ws"],
+                        help="Graph topology to generate (default: ba).")
     parser.add_argument("--n-low", type=int, default=N_LOW,
-                        help="Lower bound for uniform graph-size draw (default: 20).")
+                        help="Lower bound for uniform graph-size draw (default: 30).")
     parser.add_argument("--n-high", type=int, default=N_HIGH,
                         help="Upper bound for uniform graph-size draw (default: 50).")
     parser.add_argument("--alpha", type=float, nargs="+", default=DEFAULT_ALPHA)
@@ -170,18 +176,23 @@ def main() -> None:
 
     print(f"\nGrid: {len(args.alpha)} alpha x {len(args.pfail)} pfail x "
           f"{len(args.budget)} budget = {total_cells} cells")
-    print(f"Graphs: {args.num_graphs} (n ~ Uniform[{args.n_low}, {args.n_high}]), "
-          f"{len(args.seeds)} seeds -> {episodes_per_cell} episodes/cell")
+    print(f"Graph type: {args.graph_type.upper()}  n ~ Uniform[{args.n_low}, {args.n_high}]  "
+          f"{args.num_graphs} graphs  {len(args.seeds)} seeds -> {episodes_per_cell} episodes/cell")
     print(f"Training reference: alpha={train_alpha}, pfail={train_pfail}, budget={train_budget}")
 
-    # Generate one shared graph set reused across all (alpha, pfail, budget) cells
-    rng = Random(7777)
-    graphs: list = []
-    for i in range(args.num_graphs):
-        n = rng.randint(args.n_low, args.n_high)
-        g = make_ba_graph(n=n, m=m, seed=rng.randint(0, 10**9))
+    # Generate one shared graph set reused across all (alpha, pfail, budget) cells.
+    # Each graph type uses a distinct seed so pools don't overlap when all three
+    # are run back-to-back.
+    graph_seed = _GRAPH_SEEDS.get(args.graph_type, hash(args.graph_type) % 10**6)
+    graphs = make_graph_batch(
+        num_graphs=args.num_graphs,
+        n_range=(args.n_low, args.n_high),
+        m=m,
+        seed=graph_seed,
+        graph_type=args.graph_type,
+    )
+    for i, g in enumerate(graphs):
         g.graph["graph_index"] = i
-        graphs.append(g)
 
     sizes = [g.number_of_nodes() for g in graphs]
     avg_n = sum(sizes) / len(sizes)
@@ -253,17 +264,18 @@ def main() -> None:
 
     output = {
         "description": (
-            "Parameter generalisation sweep: all 6 policies across (alpha, pfail, budget) grid "
-            "on 100 BA graphs with n ~ Uniform[20, 50]. "
+            f"Parameter generalisation sweep: all 6 policies across (alpha, pfail, budget) grid "
+            f"on {args.num_graphs} {args.graph_type.upper()} graphs with "
+            f"n ~ Uniform[{args.n_low}, {args.n_high}]. "
             "Same graph set reused across all cells."
         ),
         "training_reference": {
             "alpha": train_alpha,
             "pfail": train_pfail,
             "budget": train_budget,
-            "n_range": list(training["graph"]["n_range"]),
         },
         "grid_spec": {
+            "graph_type": args.graph_type,
             "alpha_values": args.alpha,
             "pfail_values": args.pfail,
             "budget_values": args.budget,
