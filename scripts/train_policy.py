@@ -56,6 +56,23 @@ def load_config(path: Path) -> dict[str, Any]:
 
 
 def build_training_config(config: dict[str, Any], *, episodes_override: int | None = None) -> TrainingConfig:
+    """
+    Builds a TrainingConfig from a parsed configuration mapping.
+    
+    Expects `config` to contain at least the top-level keys "training", "regime", "graph", and "evaluation". Optionally reads "budget_scaling". Values under these sections are read and coerced into the corresponding TrainingConfig fields (e.g., numeric strings are converted to int/float, sequences to tuples). Fields that are omitted fall back to defaults from a fresh TrainingConfig().
+    
+    Parameters:
+        config (dict[str, Any]): Parsed YAML/JSON configuration with the sections:
+            - "training": main training settings (seed, device, num_episodes, replay/batch settings, validation, checkpoint, etc.)
+            - "regime": environment/regime settings (alpha, pfail, budget, rounds, noise, action_space, obs_hops, abandonment threshold, homogenize_reward, etc.)
+            - "graph": graph generation settings (n_range, m, graph_type)
+            - "evaluation": evaluation settings (tau fallback for validation_tau)
+            - "budget_scaling" (optional): budget-scaling options ("enabled", "reference_n", "scale_max_rounds")
+        episodes_override (int | None): If provided, uses this value for num_episodes instead of the value in `training["num_episodes"]`.
+    
+    Returns:
+        TrainingConfig: A TrainingConfig instance populated from the provided configuration with appropriate type normalization and defaults applied.
+    """
     defaults = TrainingConfig()
     training = config["training"]
     regime = training["regime"]
@@ -165,6 +182,14 @@ def build_training_config(config: dict[str, Any], *, episodes_override: int | No
 
 
 def parse_args() -> argparse.Namespace:
+    """
+    Parse command-line arguments for the training script, providing configuration, override, diagnostic, validation, and ablation options.
+    
+    Parses options including: --config (YAML path), alpha/pfail overrides and their per-episode grids (--alpha, --pfail, --alpha-values, --pfail-values), --episodes, --checkpoint-dir, diagnostic toggles (--log-episode-spread, --log-grad-norm), validation controls (--validation-eval-set, --validation-every), and the ablation flag --no-homogenize-reward.
+    
+    Returns:
+        argparse.Namespace: Parsed arguments with attributes corresponding to the flags described above (e.g., config, alpha, pfail, alpha_values, pfail_values, episodes, checkpoint_dir, log_episode_spread, log_grad_norm, validation_eval_set, validation_every, no_homogenize_reward).
+    """
     parser = argparse.ArgumentParser(description="Train the recovery Q-network.")
     parser.add_argument(
         "--config",
@@ -234,6 +259,11 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    """
+    Run training using CLI arguments and a YAML configuration, then save a checkpoint and a JSON summary.
+    
+    Parses command-line arguments, loads and builds a TrainingConfig (applying CLI overrides), executes training via the recovery trainer, writes a summary JSON alongside the produced checkpoint, records run metadata, and prints the saved checkpoint and summary paths.
+    """
     args = parse_args()
     config = load_config(args.config)
     training_config = build_training_config(config, episodes_override=None)

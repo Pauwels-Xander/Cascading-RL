@@ -9,7 +9,20 @@ import networkx as nx
 
 
 def make_ba_graph(n: int = 40, m: int = 2, seed: int | None = None) -> nx.Graph:
-    """Generate a Barabasi-Albert graph used for synthetic training data."""
+    """
+    Generate a Barabási–Albert (preferential attachment) undirected graph for synthetic data.
+    
+    Parameters:
+        n (int): Number of nodes in the graph; must be at least 2.
+        m (int): Number of edges to attach from a new node to existing nodes (attachment parameter); must be at least 1 and smaller than `n`.
+        seed (int | None): Optional random seed for reproducible graph generation.
+    
+    Returns:
+        graph (nx.Graph): An undirected Barabási–Albert graph with `n` nodes and attachment parameter `m`.
+    
+    Raises:
+        ValueError: If `n < 2`, if `m < 1`, or if `m >= n`.
+    """
     if n < 2:
         raise ValueError("n must be at least 2.")
     if m < 1:
@@ -20,18 +33,17 @@ def make_ba_graph(n: int = 40, m: int = 2, seed: int | None = None) -> nx.Graph:
 
 
 def make_ws_graph(n: int = 40, m: int = 2, p: float = 0.1, seed: int | None = None) -> nx.Graph:
-    """Generate a Watts-Strogatz small-world graph with average degree matched to BA.
-
-    Uses k = 2*m nearest neighbours (giving average degree 2m = that of BA/ER graphs)
-    and rewiring probability p=0.1 to produce small-world structure (high clustering,
-    short paths) while preserving connectivity.
-
-    Parameters
-    ----------
-    n : number of nodes
-    m : BA-equivalent parameter; k = 2*m neighbours in the ring lattice
-    p : rewiring probability (default 0.1)
-    seed : RNG seed for reproducibility
+    """
+    Generate a Watts–Strogatz small-world graph parameterized to target an average degree of 2*m.
+    
+    Parameters:
+        n (int): Number of nodes; must be at least 2.
+        m (int): Controls the ring lattice neighbourhoods; each node is initially connected to k = 2*m nearest neighbours. Must be at least 1 and satisfy 2*m < n.
+        p (float): Rewiring probability for each edge (controls randomness / small-world property).
+        seed (int | None): Optional random seed for reproducibility.
+    
+    Returns:
+        nx.Graph: An undirected Watts–Strogatz graph with n nodes, initial degree k = 2*m, and rewiring probability p.
     """
     if n < 2:
         raise ValueError("n must be at least 2.")
@@ -44,11 +56,21 @@ def make_ws_graph(n: int = 40, m: int = 2, p: float = 0.1, seed: int | None = No
 
 
 def make_er_graph(n: int = 40, m: int = 2, seed: int | None = None) -> nx.Graph:
-    """Generate an Erdos-Renyi graph with edge probability matched to BA average degree.
-
-    Edge probability p = 2*m / n so that E[degree] = 2*m, matching the BA graph
-    used in training. This makes the two graph types comparable in density.
-    Retries until a connected graph is produced (ER can be disconnected at low p).
+    """
+    Generate an Erdős–Rényi undirected graph whose expected average degree is approximately 2*m and ensure the returned graph is connected.
+    
+    The edge probability used is p = min(2*m / n, 1.0). The function will attempt up to 1000 independent draws to obtain a connected graph; if no connected graph is produced, it falls back to a single draw and connects remaining components by adding edges between a representative node of each component and the largest component.
+    
+    Parameters:
+        n (int): Number of nodes; must be at least 2.
+        m (int): Target parameter such that expected average degree ≈ 2*m; must be at least 1.
+        seed (int | None): Optional random seed for reproducible graph generation.
+    
+    Returns:
+        nx.Graph: A connected NetworkX undirected graph with n nodes.
+    
+    Raises:
+        ValueError: If `n < 2` or `m < 1`.
     """
     if n < 2:
         raise ValueError("n must be at least 2.")
@@ -78,15 +100,18 @@ def make_graph_batch(
     seed: int | None = None,
     graph_type: str = "ba",
 ) -> list[nx.Graph]:
-    """Generate a batch of synthetic graphs with varying sizes.
-
-    Parameters
-    ----------
-    graph_type : "ba" (Barabasi-Albert, default), "er" (Erdos-Renyi), or "ws" (Watts-Strogatz).
-        All types target average degree 2*m:
-        - BA : preferential attachment, scale-free degree distribution
-        - ER : random, p = 2*m/n
-        - WS : small-world ring lattice with k=2*m neighbours, p=0.1 rewiring
+    """
+    Create a list of synthetic undirected graphs with varying node counts.
+    
+    Parameters:
+        num_graphs (int): Number of graphs to generate; must be >= 1.
+        n_range (tuple[int, int]): Inclusive range (min_n, max_n) for the number of nodes per graph; min_n must be <= max_n.
+        m (int): Parameter controlling average degree; generators target average degree approximately 2*m.
+        seed (int | None): Seed for reproducible variation across the batch.
+        graph_type (str): Generator type to use: "ba" (Barabási–Albert), "er" (Erdős–Rényi), or "ws" (Watts–Strogatz).
+    
+    Returns:
+        list[nx.Graph]: Generated NetworkX graphs. Each graph has metadata key "graph_index" set to its position in the returned list.
     """
     if num_graphs < 1:
         raise ValueError("num_graphs must be at least 1.")
@@ -114,20 +139,19 @@ def make_graph_batch(
 
 
 def load_real_world_graph(name: str, data_dir: Path | str | None = None) -> nx.Graph:
-    """Load a pre-downloaded real-world network from data/processed/.
-
-    Parameters
-    ----------
-    name : "ieee300" or "usair"
-        Which dataset to load.
-    data_dir : path to the data/processed/ directory. Defaults to the repo's
-        data/processed/ folder resolved relative to this file.
-
-    Returns
-    -------
-    A connected, undirected NetworkX graph with 0-indexed integer nodes.
-    Raises FileNotFoundError if the CSV has not been downloaded yet —
-    run scripts/download_real_world_data.py first.
+    """
+    Load a named real-world undirected graph from a pre-downloaded CSV and return a connected, 0-indexed NetworkX graph.
+    
+    Parameters:
+        name (str): Dataset identifier. Supported values: "ieee300", "watts_strogatz".
+        data_dir (Path | str | None): Path to the directory containing processed CSV files. If None, defaults to the repository's data/processed directory resolved relative to this file.
+    
+    Returns:
+        nx.Graph: A connected undirected graph whose nodes are integers reindexed to 0..N-1 and with graph metadata key "name" set to `name`.
+    
+    Raises:
+        ValueError: If `name` is not one of the supported dataset identifiers or if the loaded CSV contains no valid edges.
+        FileNotFoundError: If the expected CSV file is not present at the resolved `data_dir`.
     """
     filenames = {
         "ieee300": "ieee300_edges.csv",
@@ -176,7 +200,15 @@ def load_real_world_graph(name: str, data_dir: Path | str | None = None) -> nx.G
 
 
 def relabel_graph_with_prefix(graph: nx.Graph, prefix: str) -> nx.Graph:
-    """Return a copy with node names prefixed for easier dataset composition."""
+    """
+    Create a copy of the graph with each node label prefixed by the given string.
+    
+    Parameters:
+        prefix (str): String to prepend to each node label; the original label is converted to a string before concatenation.
+    
+    Returns:
+        nx.Graph: A new graph with the same nodes and edges but with node labels replaced by `prefix + original_label`.
+    """
     return nx.relabel_nodes(graph, {node: f"{prefix}{node}" for node in graph.nodes()})
 
 

@@ -47,6 +47,12 @@ IEEE300_OUT = PROCESSED_DIR / "ieee300_edges.csv"
 
 
 def _download(url: str) -> str:
+    """
+    Download the content at the given URL and return it as text.
+    
+    Returns:
+        The response body as decoded text.
+    """
     import subprocess
     print(f"  Downloading {url} ...", flush=True)
     result = subprocess.run(
@@ -59,10 +65,14 @@ def _download(url: str) -> str:
 
 
 def parse_ieee300(matpower_text: str) -> list[tuple[int, int]]:
-    """Extract branch connections from a MATPOWER .m file.
-
-    MATPOWER branch data: each row is [from_bus, to_bus, r, x, b, ...]
-    Bus numbers are arbitrary integers in the file; we re-index to 0..N-1.
+    """
+    Extracts undirected branch edges from MATPOWER .m file text and reindexes bus IDs to contiguous 0..N-1 integers.
+    
+    Parameters:
+        matpower_text (str): The full text content of a MATPOWER-format `.m` file containing an `mpc.branch` table.
+    
+    Returns:
+        list[tuple[int, int]]: List of unique edges as `(u, v)` tuples with `u < v`. Each tuple refers to reindexed node IDs in the range 0..N-1. Self-loops are omitted and parallel/duplicate edges are deduplicated, preserving first-seen order.
     """
     raw_edges: list[tuple[int, int]] = []
     in_branch = False
@@ -97,6 +107,14 @@ def parse_ieee300(matpower_text: str) -> list[tuple[int, int]]:
 
 
 def download_ieee300() -> None:
+    """
+    Download the IEEE 300-bus MATPOWER file, parse its branch connections, and write an undirected edge-list CSV to the processed data directory.
+    
+    Parses the downloaded MATPOWER text to extract branch endpoint pairs, reindexes bus IDs to contiguous 0..N-1 indices, deduplicates undirected edges, and writes them to IEEE300_OUT with a header ["from", "to"].
+    
+    Raises:
+        RuntimeError: If no edges are parsed from the downloaded MATPOWER file.
+    """
     print("IEEE 300-bus power grid:")
     text = _download(IEEE300_URL)
     edges = parse_ieee300(text)
@@ -125,6 +143,11 @@ WS_SEED = 42
 
 
 def generate_watts_strogatz() -> None:
+    """
+    Generate a deterministic Watts–Strogatz small-world graph and write its undirected edge list to WS_OUT.
+    
+    Creates a Watts–Strogatz graph using module-level parameters (WS_N, WS_K, WS_P, WS_SEED), ensures the processed data directory exists, and writes a CSV file with header "from,to" containing each undirected edge (endpoints ordered as (min, max)). Prints a brief summary including edge count, node count, average degree, and the output path.
+    """
     import networkx as nx
     print(f"Watts-Strogatz small-world (n={WS_N}, k={WS_K}, p={WS_P}, seed={WS_SEED}):")
     g = nx.watts_strogatz_graph(n=WS_N, k=WS_K, p=WS_P, seed=WS_SEED)
@@ -143,6 +166,11 @@ def generate_watts_strogatz() -> None:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    """
+    Orchestrates preparation of real-world network datasets by running the IEEE300 download/parsing and the Watts–Strogatz generation tasks.
+    
+    Runs the dataset-specific functions in sequence and terminates the process with exit code 1 if any task raises an exception.
+    """
     print("Setting up network datasets...\n")
     try:
         download_ieee300()

@@ -43,6 +43,15 @@ from scripts.reproducibility import write_run_metadata
 
 
 def load_checkpoint(path: Path) -> tuple[RecoveryQNetwork, dict]:
+    """
+    Load a saved RecoveryQNetwork checkpoint and return the instantiated model and its training configuration.
+    
+    Parameters:
+        path (Path): Filesystem path to the checkpoint file.
+    
+    Returns:
+        tuple: A 2-tuple (model, training_config) where `model` is a RecoveryQNetwork initialized with weights from the checkpoint and set to evaluation mode, and `training_config` is a dict of saved training settings (empty if not present).
+    """
     import torch
     data = torch.load(path, map_location="cpu", weights_only=False)
     from cascading_rl.models import QNetworkConfig
@@ -54,6 +63,18 @@ def load_checkpoint(path: Path) -> tuple[RecoveryQNetwork, dict]:
 
 
 def parse_args() -> argparse.Namespace:
+    """
+    Parse command-line arguments for evaluating a trained RecoveryQNetwork on Erdos–Renyi graphs.
+    
+    Returns:
+        args (argparse.Namespace): Parsed CLI namespace with the following attributes:
+            checkpoint (Path): Path to the trained checkpoint file.
+            config (Path): Path to the YAML config file providing regime parameters.
+            num_graphs (int): Number of ER graphs to generate and evaluate.
+            seeds (list[int]): Failure seeds used per graph (default: 0..9).
+            graph_seed (int): Seed for ER graph generation (kept separate from evaluation seeds).
+            output_dir (Path): Directory where output artifacts (JSON summaries, metadata) will be written.
+    """
     parser = argparse.ArgumentParser(description="Evaluate trained policy on ER graphs.")
     parser.add_argument(
         "--checkpoint",
@@ -91,6 +112,11 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    """
+    Run evaluation of a trained RecoveryQNetwork on generated Erdos–Renyi graphs and write aggregated results.
+    
+    Reads the provided YAML config and checkpoint, generates a batch of ER graphs (using training graph parameters), builds an RL greedy policy plus baseline policies, collects matched evaluation episodes across specified failure seeds and graphs, computes per-policy summary statistics and pairwise comparisons versus the "degree" baseline, writes a JSON summary file to the output directory, prints a human-readable summary table, and writes run metadata linking the produced summary.
+    """
     args = parse_args()
 
     with args.config.open("r", encoding="utf-8") as f:
@@ -161,6 +187,22 @@ def main() -> None:
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     def _fmt(summary) -> dict:
+        """
+        Create a compact dictionary of selected statistics extracted from a policy summary object.
+        
+        Parameters:
+            summary: An object with attributes `anc_fixed`, `final_nc`, `solved_fraction`, and `rounds` (each providing `.mean` and `.stderr`), and `episode_count`.
+        
+        Returns:
+            dict: Keys:
+                - `anc_fixed_mean`: mean of ANC fixed metric.
+                - `anc_fixed_stderr`: standard error of ANC fixed metric.
+                - `final_nc_mean`: mean of final node count.
+                - `final_nc_stderr`: standard error of final node count.
+                - `solved_fraction_mean`: mean fraction of solved episodes.
+                - `rounds_mean`: mean number of rounds.
+                - `episode_count`: number of episodes in the summary.
+        """
         return {
             "anc_fixed_mean": summary.anc_fixed.mean,
             "anc_fixed_stderr": summary.anc_fixed.stderr,

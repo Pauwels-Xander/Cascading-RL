@@ -135,6 +135,27 @@ class RecoveryEnv:
         abandonment_nc_threshold: float | None = None,
         homogenize_reward: bool = True,
     ) -> None:
+        """
+        Initialize the recovery environment, validate inputs, and store configuration and runtime placeholders.
+        
+        Parameters:
+            graph: Base networkx graph used for cascade and recovery dynamics; a copy is stored.
+            alpha: Cascade propagation parameter controlling load redistribution strength.
+            pfail: Baseline per-node failure probability used when seeding initial failures.
+            budget: Number of node reactivations allowed per round; must be >= 1.
+            max_rounds: Maximum number of recovery rounds; if None, defaults to number of nodes.
+            seed: RNG seed for stochastic aspects; if None, a default seed is used.
+            load_fn: Optional callable to compute node loads from the graph when building state.
+            capacity_noise: Standard deviation of multiplicative noise applied to node capacities.
+            failure_bias: Strategy for selecting initial failed nodes (e.g., "uniform").
+            action_space: Which failed nodes are eligible for reactivation ("failed", "frontier", "adjacent", or "adjacent_to_active").
+            obs_hops: If set, observation values (loads/capacities) are zeroed for nodes farther than this many hops from any failed node.
+            abandonment_nc_threshold: If set, episode is abandoned when normalized connectivity after a cascade falls below this value (must be in [0, 1]).
+            homogenize_reward: When True, rewards are aggregated per round so intermediate steps yield zero and the final step receives the round delta; when False, rewards are per-step NC gain.
+        
+        Raises:
+            ValueError: If budget < 1, max_rounds < 1 when provided, obs_hops < 1 when provided, or abandonment_nc_threshold is outside [0, 1].
+        """
         if budget < 1:
             raise ValueError("budget must be at least 1.")
         if max_rounds is not None and max_rounds < 1:
@@ -179,6 +200,17 @@ class RecoveryEnv:
         # When ``seed`` is given, the environment RNG is fully re-seeded before
         # ``build_initial_state``; the constructor ``seed=`` does not affect
         # failure sampling after such a reset (only ``reset(seed=...)`` matters).
+        """
+        Reset the environment and initialize a new cascade state.
+        
+        If `seed` is provided, re-seeds the environment's internal random generator before sampling the initial failures; this seeding controls failure sampling for this reset call and overrides any constructor seed for that sampling. The method also resets episode counters and computes the starting normalized connectivity.
+        
+        Parameters:
+            seed (int | None): Optional integer to re-seed the environment RNG prior to building the initial state. If `None`, the existing RNG state is used.
+        
+        Returns:
+            RecoveryObservation: Observation representing the newly initialized environment state immediately after reset.
+        """
         if seed is not None:
             self._rng.seed(seed)
         self.state = build_initial_state(
@@ -231,6 +263,23 @@ class RecoveryEnv:
         return post_cascade_nc < self.abandonment_nc_threshold and bool(self.state.failed)
 
     def step(self, action: Node) -> tuple[RecoveryObservation, float, bool, dict[str, object]]:
+        """
+        Apply a single-node recovery action, advance the environment state, and optionally trigger a cascade wave at the end of the round.
+        
+        Parameters:
+            action (Node): The node to reactivate; must be one of the currently valid recovery choices.
+        
+        Returns:
+            tuple:
+                - observation (RecoveryObservation): Observation after applying the action and any cascade.
+                - reward (float): Change in normalized connectivity according to the configured reward mode.
+                - done (bool): Whether the episode has terminated after this step.
+                - info (dict[str, object]): Additional diagnostics including NC values, counts, round/budget metadata, newly failed nodes, and termination flags.
+        
+        Raises:
+            RuntimeError: If the environment has not been reset or no recovery budget remains.
+            ValueError: If `action` is not a currently valid recovery choice.
+        """
         if self.state is None:
             raise RuntimeError("Environment must be reset before use.")
         if self.remaining_budget <= 0:

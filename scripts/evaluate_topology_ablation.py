@@ -61,6 +61,17 @@ POLICY_ORDER = ["rl", "greedy", "degree", "betweenness", "risk", "random"]
 
 
 def load_checkpoint(path: Path) -> RecoveryQNetwork:
+    """
+    Load a RecoveryQNetwork from a PyTorch checkpoint file.
+    
+    Parameters:
+        path (Path): Filesystem path to a PyTorch checkpoint containing the keys
+            "model_config" (mapping of QNetworkConfig parameters) and "model_state"
+            (state_dict for the model).
+    
+    Returns:
+        RecoveryQNetwork: The reconstructed model set to evaluation mode.
+    """
     import torch
     from cascading_rl.models import QNetworkConfig
     data = torch.load(path, map_location="cpu", weights_only=False)
@@ -72,6 +83,18 @@ def load_checkpoint(path: Path) -> RecoveryQNetwork:
 
 
 def parse_args() -> argparse.Namespace:
+    """
+    Parse command-line arguments for the topology ablation evaluation.
+    
+    @returns:
+        argparse.Namespace: Parsed arguments with the following attributes:
+            checkpoint (Path): Path to the model checkpoint.
+            config (Path): Path to the YAML configuration file.
+            topologies (list[str]): Topology types to include (e.g., ["ba","er","ws"]).
+            num_graphs (int): Number of graphs to generate per topology type.
+            seeds (list[int]): Failure/episode seeds to use per graph.
+            output_dir (Path): Directory where outputs and metadata will be written.
+    """
     parser = argparse.ArgumentParser(
         description="Topology ablation: BA vs ER vs WS at n∈[30,50], matched degree."
     )
@@ -113,6 +136,27 @@ def parse_args() -> argparse.Namespace:
 
 
 def _fmt_summary(summary) -> dict:
+    """
+    Format a summary object into a plain dictionary with selected, rounded statistics.
+    
+    Parameters:
+        summary: An object with the following attributes:
+            - anc_fixed: object with `mean` and `stderr` numeric attributes
+            - final_nc: object with `mean` and `stderr` numeric attributes
+            - solved_fraction: object with a `mean` numeric attribute
+            - rounds: object with a `mean` numeric attribute
+            - episode_count: integer count of episodes
+    
+    Returns:
+        dict: A mapping with these keys:
+            - "anc_fixed_mean": `anc_fixed.mean` rounded to 4 decimal places
+            - "anc_fixed_stderr": `anc_fixed.stderr` rounded to 4 decimal places
+            - "final_nc_mean": `final_nc.mean` rounded to 4 decimal places
+            - "final_nc_stderr": `final_nc.stderr` rounded to 4 decimal places
+            - "solved_fraction_mean": `solved_fraction.mean` rounded to 4 decimal places
+            - "rounds_mean": `rounds.mean` rounded to 2 decimal places
+            - "episode_count": the original `episode_count` value
+    """
     return {
         "anc_fixed_mean": round(summary.anc_fixed.mean, 4),
         "anc_fixed_stderr": round(summary.anc_fixed.stderr, 4),
@@ -140,7 +184,29 @@ def run_topology(
     scale_max_rounds: bool,
     reference_n: int,
 ) -> tuple[dict, list]:
-    """Run all policies on one topology type. Returns (summaries_dict, comparisons_list)."""
+    """
+    Run evaluation of all policies on a single graph topology and produce per-policy summaries and pairwise comparisons.
+    
+    Parameters:
+        topology (str): Topology name (e.g., "ba", "er", "ws") to generate graphs for.
+        model (RecoveryQNetwork): Loaded recovery Q-network used to build the RL greedy policy.
+        alpha (float): Regime parameter controlling attack/repair trade-off.
+        pfail (float): Per-episode failure probability used by the environment.
+        budget (int): Action budget per episode (may be scaled by `scale_budget`).
+        max_rounds (int): Maximum rounds per episode (may be scaled by `scale_max_rounds`).
+        m (int): Graph model parameter controlling target average degree (≈ 2*m for BA/WS).
+        n_range (tuple[int, int]): Inclusive range of graph sizes (number of nodes) to sample.
+        num_graphs (int): Number of graph instances to generate for this topology.
+        seeds (list[int]): List of episode/failure seeds shared across topologies to align failure regimes.
+        scale_budget (bool): If True, scale `budget` according to `reference_n` and sampled graph size.
+        scale_max_rounds (bool): If True, scale `max_rounds` according to `reference_n` and sampled graph size.
+        reference_n (int): Reference number of nodes used when applying budget/round scaling.
+    
+    Returns:
+        tuple[dict, list]: A pair where the first element is a mapping from policy name to its summarized metrics,
+        and the second element is a list of pairwise comparison results (each comparing a policy to the "degree" baseline
+        for the `anc_fixed` metric).
+    """
     import torch
     print(f"\n{'='*55}")
     print(f"Topology: {topology.upper()}")
@@ -210,6 +276,11 @@ def run_topology(
 
 
 def main() -> None:
+    """
+    Run the topology ablation experiment and persist a JSON summary and run metadata.
+    
+    Parses command-line arguments, loads the evaluation configuration and a trained recovery Q-network checkpoint, evaluates the configured policies across the requested graph topologies (BA, ER, WS) using the specified regime and graph parameters, aggregates per-policy summaries and comparisons versus the degree baseline, and writes a summary JSON and run metadata file into the output directory.
+    """
     args = parse_args()
 
     with args.config.open("r", encoding="utf-8") as f:

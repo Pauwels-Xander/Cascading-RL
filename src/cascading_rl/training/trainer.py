@@ -165,6 +165,16 @@ def build_model_config(config: TrainingConfig) -> QNetworkConfig:
 
 
 def _mean_recent(values: list[float], window: int = 10) -> float:
+    """
+    Compute the mean of the most recent values in a sequence.
+    
+    Parameters:
+        values (list[float]): Sequence of numeric values.
+        window (int): Number of most-recent entries to include in the mean.
+    
+    Returns:
+        float: Mean of the last up to `window` entries, or `0.0` if `values` is empty.
+    """
     if not values:
         return 0.0
     recent = values[-window:]
@@ -172,6 +182,16 @@ def _mean_recent(values: list[float], window: int = 10) -> float:
 
 
 def _rolling_recovered_fraction(flags: list[bool], window: int) -> float:
+    """
+    Compute the fraction of True values among the most recent entries.
+    
+    Parameters:
+        flags (list[bool]): Sequence of boolean indicators.
+        window (int): Number of most recent entries to consider; if greater than len(flags), all entries are used.
+    
+    Returns:
+        float: Fraction of `True` values in the considered window, or 0.0 if `flags` is empty.
+    """
     if not flags:
         return 0.0
     chunk = flags[-window:]
@@ -179,6 +199,15 @@ def _rolling_recovered_fraction(flags: list[bool], window: int) -> float:
 
 
 def _normalize_action_batch(action: object) -> tuple[Node, ...]:
+    """
+    Normalize an action into a tuple of Node elements.
+    
+    Parameters:
+        action (object): An action given as a tuple of Nodes, a list of Nodes, or a single Node value.
+    
+    Returns:
+        tuple[Node, ...]: The action represented as a tuple of Nodes. If `action` is already a tuple it is returned unchanged; if it is a list it is converted to a tuple; otherwise `action` is wrapped as a single-element tuple.
+    """
     if isinstance(action, tuple):
         return action
     if isinstance(action, list):
@@ -252,6 +281,21 @@ def _render_progress_line(
     rolling_episodes: int = ROLLING_TRAIN_METRICS_EPISODES,
     bar_width: int = 28,
 ) -> str:
+    """
+    Render a single-line progress bar summarizing recent training metrics.
+    
+    Parameters:
+        episode (int): Current episode index (0-based).
+        total_episodes (int): Total number of training episodes.
+        epsilon (float): Current exploration epsilon value to display.
+        training_state (TrainingState): Object containing recent metric histories used to compute rolling statistics.
+        rolling_episodes (int): Window size for rolling metrics (defaults to ROLLING_TRAIN_METRICS_EPISODES).
+        bar_width (int): Character width of the progress bar.
+    
+    Returns:
+        str: A one-line string containing a progress bar, episode counter, epsilon, recent mean reward,
+        recent final NC, rolling recovery fraction, rolling mean ANC (unconditional), and recent loss.
+    """
     completed = episode + 1
     progress = completed / max(1, total_episodes)
     filled = int(bar_width * progress)
@@ -310,6 +354,20 @@ def compute_dqn_loss(
     # (b = B, cascade-inclusive reward). Without it the Q-network receives
     # conflicting Bellman targets for observationally identical inputs, and
     # the loss converges to a biased mixture of the two reward regimes.
+    """
+    Compute the mean SmoothL1 DQN loss for a batch of transitions, using the target network to form bootstrapped targets.
+    
+    For each transition the selected Q-value is the network output for the first element of `transition.action`. The target is initialized to `transition.reward` and, if the transition is not terminal and `transition.next_observation.failed` is true, is augmented by
+    `gamma ** transition.bootstrap_steps * max(Q_next over valid next actions)` when valid next-action indices exist. Raises ValueError if the model's active node features do not include `"budget_coverage"`.
+    
+    Parameters:
+        transitions (list[Transition]): Batch of transitions to compute the loss over.
+        gamma (float): Discount factor used for bootstrap discounting.
+        device (torch.device): Device on which tensors and targets are allocated.
+    
+    Returns:
+        torch.Tensor: Mean SmoothL1 loss across the provided transitions.
+    """
     if "budget_coverage" not in model.feature_names:
         raise ValueError(
             "budget_coverage must be present in active node features when "
@@ -361,7 +419,21 @@ def _maybe_update(
     training_state: "TrainingState",
     rng: Random,
 ) -> None:
-    """Sample a mini-batch and apply one gradient update if the buffer is ready."""
+    """
+    Perform a single optimization step using a minibatch from the replay buffer when the buffer is ready.
+    
+    If the replay buffer contains at least max(config.batch_size, config.warmup_transitions) transitions, this function samples a batch, computes the DQN loss, applies one optimizer step with gradient clipping, records the loss into training_state.losses, and—every config.target_update_interval steps—copies model weights to target_model. If config.log_grad_norm is true, prints the summed gradient norm for diagnostic purposes.
+    
+    Parameters:
+        model: The trainable Q-network.
+        target_model: The target Q-network to be updated periodically.
+        optimizer: Optimizer used for the update; must support zero_grad(), step(), and parameter gradients.
+        replay_buffer: Object supporting len() and sample(batch_size, rng=...) to draw minibatches.
+        config: TrainingConfig providing batch_size, warmup_transitions, target_update_interval, and log_grad_norm.
+        device: Torch device for any device-specific computations (passed through to loss computation).
+        training_state: TrainingState used to append loss history and to read total_steps for target updates.
+        rng: Random instance used for sampling from the replay buffer.
+    """
     if len(replay_buffer) < max(config.batch_size, config.warmup_transitions):
         return
     batch = replay_buffer.sample(config.batch_size, rng=rng)
@@ -387,15 +459,18 @@ def rewrite_round(
     s_post_cascade: RecoveryObservation,
     gamma: float,
 ) -> list[Transition]:
-    """Rewrite buffered intra-round transitions with suffix-discounted rewards.
-
-    For a round with steps k=0..n-1 (k=n-1 is the cascade step):
-        reward[k] = r_k + γ·r_{k+1} + ... + γ^{n-1-k}·r_cascade
-
-    Every rewritten transition bootstraps from s_post_cascade, making the
-    cascade outcome directly visible in every step's Q-target. The number of
-    collapsed steps to that bootstrap state is stored in ``bootstrap_steps``.
-    done is taken from the last transition (True if episode ended here).
+    """
+    Rewrite a round's intra-step transitions so each step's reward includes the discounted sum of subsequent rewards up to the cascade outcome.
+    
+    Each returned Transition uses the same observation and action as the corresponding input step, sets `next_observation` to `s_post_cascade`, copies `done` from the last input transition, and records how many steps until the bootstrap state in `bootstrap_steps`.
+    
+    Parameters:
+        transitions (list[Transition]): Ordered list of transitions for a single round (first to last step).
+        s_post_cascade (RecoveryObservation): Observation representing the environment state after the round's cascade to use as the next state for all rewritten transitions.
+        gamma (float): Discount factor used to compute suffix-discounted rewards.
+    
+    Returns:
+        list[Transition]: New transitions where each reward is the discounted suffix sum from its original step through the cascade, `next_observation` is `s_post_cascade`, `done` equals the original round's terminal flag, and `bootstrap_steps` equals the number of steps from the original step to the bootstrap state.
     """
     if not transitions:
         return []
@@ -419,6 +494,14 @@ def rewrite_round(
 
 
 def _env_kwargs_from_config(config: TrainingConfig) -> dict[str, Any]:
+    """
+    Extract environment-relevant keyword arguments from a TrainingConfig.
+    
+    Returns:
+        dict[str, Any]: Mapping of environment keyword names to values taken from the provided config:
+            "capacity_noise", "failure_bias", "action_space", "obs_hops",
+            "abandonment_nc_threshold", and "homogenize_reward".
+    """
     return {
         "capacity_noise": config.capacity_noise,
         "failure_bias": config.failure_bias,
@@ -798,6 +881,21 @@ def save_checkpoint(
     *,
     episode: int,
 ) -> Path:
+    """
+    Persist the given model, configuration, and selected training state fields to a PyTorch checkpoint file.
+    
+    Saves a dict containing the episode number, model state dict, model config, training config, and a subset of training_state fields (episode_rewards, episode_final_nc, episode_final_anc, episode_recovered, episode_mean_anc_unconditional, episode_alpha, episode_pfail, episode_spreads, losses, validation_history, total_steps). Ensures the output directory exists before writing.
+    
+    Parameters:
+        model: The trained RecoveryQNetwork whose state_dict will be saved.
+        config: The TrainingConfig to include in the checkpoint.
+        training_state: The TrainingState containing histories and counters to persist.
+        output_path (str | Path): Filesystem path where the checkpoint will be written.
+        episode (int): Episode index to record in the checkpoint.
+    
+    Returns:
+        Path: The resolved path to the written checkpoint file.
+    """
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(
@@ -826,6 +924,25 @@ def save_checkpoint(
 
 
 def train_recovery_agent(config: TrainingConfig) -> tuple[RecoveryQNetwork, TrainingState, Path]:
+    """
+    Run the full training loop for a DQN-style recovery policy and return the trained model, final training state, and the checkpoint path.
+    
+    Trains a RecoveryQNetwork according to the provided TrainingConfig: constructs model/target networks and optimizer, manages replay buffer and optional imitation warmstart, generates or reuses graphs (BA/ER/WS), performs episode rollouts with either per-round suffix-discounted returns or full Monte Carlo returns, updates the Q-network with target-network bootstrapping and gradient clipping, performs periodic validation and checkpointing, and returns the final artifacts.
+    
+    Parameters:
+        config (TrainingConfig): Configuration dataclass containing all hyperparameters, environment/model settings, validation and checkpointing options, and runtime flags used to control training.
+    
+    Returns:
+        tuple[RecoveryQNetwork, TrainingState, Path]: A 3-tuple of
+            - the trained RecoveryQNetwork (model),
+            - the TrainingState containing accumulated episode/validation history and counters,
+            - the Path to the last saved checkpoint file.
+    
+    Raises:
+        ValueError: if alpha/pfail value lists are empty or an unknown graph_type is specified.
+        FileNotFoundError: if a validation_eval_set_path is provided but does not resolve to an existing file.
+        RuntimeError: if environment reset repeatedly fails to produce an initial state with failed nodes (via _reset_with_non_empty_failures).
+    """
     device = resolve_device(config.device)
     rng = Random(config.seed)
     torch.manual_seed(config.seed)

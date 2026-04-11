@@ -803,6 +803,21 @@ def run_eval_set_mode(args: argparse.Namespace, config: dict[str, Any]) -> None:
 
 
 def main() -> None:
+    """
+    Run the full evaluation pipeline: load configuration and checkpoint, evaluate selected policies on a benchmark graph batch and on a regime grid (with optional budget/max-round scaling), and write JSON summaries and run metadata.
+    
+    This function:
+    - Supports an eval-set mode when --eval-set is supplied; otherwise it loads the YAML config and runs benchmark and grid evaluations.
+    - Resolves environment and scaling configuration, builds policy factories (including optional RL policy loading), generates graph batches, runs evaluations, and estimates per-policy minimum budgets (b*).
+    - Assembles and writes the following output files to the configured output directory:
+      - evaluation_summary.json (benchmark summaries and scaling metadata)
+      - evaluation_grid_summary.json (regime grid cells and bucket summaries)
+      - run_metadata.json (script/run metadata and configuration references)
+    - Prints concise console summaries for benchmark policy results and regime-bucket gaps.
+    
+    Raises:
+        ValueError: if the resolved reference_n is less than 1.
+    """
     args = parse_args()
     config = load_config(args.config)
     if args.eval_set is not None:

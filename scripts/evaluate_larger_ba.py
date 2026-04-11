@@ -50,6 +50,15 @@ POLICY_ORDER = ["rl", "greedy", "degree", "betweenness", "risk", "random"]
 
 
 def load_checkpoint(path: Path) -> RecoveryQNetwork:
+    """
+    Load a RecoveryQNetwork checkpoint from the given filesystem path and return the model set to evaluation mode.
+    
+    Parameters:
+        path (Path): Path to a PyTorch checkpoint file containing keys `"model_config"` (for QNetworkConfig) and `"model_state"` (state dict).
+    
+    Returns:
+        RecoveryQNetwork: The instantiated network with weights loaded and .eval() called.
+    """
     import torch
     from cascading_rl.models import QNetworkConfig
     data = torch.load(path, map_location="cpu", weights_only=False)
@@ -61,6 +70,20 @@ def load_checkpoint(path: Path) -> RecoveryQNetwork:
 
 
 def parse_args() -> argparse.Namespace:
+    """
+    Parse command-line arguments for evaluating a trained recovery policy on larger Barabási–Albert (BA) graphs.
+    
+    Provides options to specify the model checkpoint, YAML config, target graph sizes to evaluate, number of graphs per size, failure seeds per graph, and the output directory.
+    
+    Returns:
+        argparse.Namespace: Parsed arguments with attributes:
+            checkpoint (Path): Path to the model checkpoint.
+            config (Path): Path to the YAML configuration file.
+            sizes (list[int]): Exact graph sizes to evaluate.
+            num_graphs (int): Number of BA graphs to generate per size.
+            seeds (list[int]): Failure seeds to use per graph.
+            output_dir (Path): Directory where results will be written.
+    """
     parser = argparse.ArgumentParser(
         description="Evaluate trained policy on larger BA graphs (scale generalisation)."
     )
@@ -103,6 +126,24 @@ def parse_args() -> argparse.Namespace:
 
 
 def _fmt(summary) -> dict:
+    """
+    Format an episode summary object into a JSON-serializable dictionary with rounded statistics.
+    
+    Parameters:
+        summary: An object containing aggregated episode statistics with attributes
+            `anc_fixed`, `final_nc`, `solved_fraction`, `rounds` (each exposing
+            `.mean` and for the first two also `.stderr`), and `episode_count`.
+    
+    Returns:
+        A dict with keys:
+          - `anc_fixed_mean`: mean of `anc_fixed`, rounded to 4 decimals.
+          - `anc_fixed_stderr`: standard error of `anc_fixed`, rounded to 4 decimals.
+          - `final_nc_mean`: mean of `final_nc`, rounded to 4 decimals.
+          - `final_nc_stderr`: standard error of `final_nc`, rounded to 4 decimals.
+          - `solved_fraction_mean`: mean of `solved_fraction`, rounded to 4 decimals.
+          - `rounds_mean`: mean of `rounds`, rounded to 2 decimals.
+          - `episode_count`: the original episode count (unmodified).
+    """
     return {
         "anc_fixed_mean": round(summary.anc_fixed.mean, 4),
         "anc_fixed_stderr": round(summary.anc_fixed.stderr, 4),
@@ -129,6 +170,26 @@ def run_size(
     scale_max_rounds: bool,
     reference_n: int,
 ) -> tuple[dict, list]:
+    """
+    Evaluate policies on multiple Barabási–Albert graphs of size n and produce per-policy aggregated summaries and pairwise comparisons against the `degree` baseline.
+    
+    Parameters:
+        n (int): Number of nodes in each generated BA graph.
+        model (RecoveryQNetwork): Trained Q-network used to build the RL policy.
+        alpha (float): Recovery objective parameter passed to episode collection.
+        pfail (float): Per-node failure probability used during evaluation.
+        budget (int): Action budget (may be scaled depending on flags).
+        max_rounds (int): Maximum rounds per episode (may be scaled depending on flags).
+        m (int): Number of edges to attach from a new node in the BA graph generator.
+        num_graphs (int): Number of distinct BA graph instances to generate for this size.
+        seeds (list[int]): Failure seeds to run per graph (one episode per seed).
+        scale_budget (bool): If true, scale `budget` relative to `reference_n`.
+        scale_max_rounds (bool): If true, scale `max_rounds` relative to `reference_n`.
+        reference_n (int): Reference graph size used when scaling budget or max rounds.
+    
+    Returns:
+        tuple[dict, list]: A pair where the first element is a mapping from policy name to its aggregated summary object (as produced by `summarize_episode_results`), and the second element is a list of pairwise comparison records (comparison vs. the `degree` baseline for the `anc_fixed` metric).
+    """
     import torch
     from random import Random
 
@@ -197,6 +258,16 @@ def run_size(
 
 
 def main() -> None:
+    """
+    Run evaluation of a trained recovery RL policy on larger Barabási–Albert graphs and write summary and metadata files.
+    
+    Loads configuration and a model checkpoint, evaluates the model alongside baseline policies across the configured graph sizes and seeds, aggregates per-policy summaries and comparisons versus the "degree" baseline, and writes `larger_ba_summary.json` and `run_metadata.json` to the configured output directory.
+    
+    Notes:
+    - Reads evaluation settings from the provided config file and command-line arguments.
+    - Writes output summary JSON to `<output_dir>/larger_ba_summary.json`.
+    - Writes provenance metadata to `<output_dir>/run_metadata.json`.
+    """
     args = parse_args()
 
     with args.config.open("r", encoding="utf-8") as f:

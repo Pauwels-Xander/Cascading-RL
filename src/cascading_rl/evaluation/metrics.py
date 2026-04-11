@@ -22,15 +22,21 @@ def compute_episode_metrics(
     anc_trajectory: list[float],
     recovered: bool,
 ) -> EpisodeMetrics:
-    """Build per-episode metrics from a recorded ANC trajectory.
-
-    Parameters
-    ----------
-    anc_trajectory:
-        ANC value recorded after each repair-cascade wave (one entry per round).
-        Length equals the actual number of rounds played.
-    recovered:
-        Whether the episode ended with full network recovery.
+    """
+    Construct an EpisodeMetrics record from a per-round ANC trajectory and a recovery flag.
+    
+    Parameters:
+        anc_trajectory (list[float]): ANC value recorded after each repair-cascade wave (one entry per round); length equals the number of rounds played.
+        recovered (bool): Whether the episode ended with full network recovery.
+    
+    Returns:
+        EpisodeMetrics: Dataclass populated as follows:
+            - recovered: set to `recovered`.
+            - rounds_to_recovery: number of rounds (`len(anc_trajectory)`) if `recovered` is True, otherwise `None`.
+            - rounds_to_termination: number of rounds (`len(anc_trajectory)`).
+            - anc_per_round: a copy of `anc_trajectory`.
+            - mean_anc_conditional: mean of `anc_trajectory` if `recovered` is True and the trajectory is non-empty, otherwise `None`.
+            - mean_anc_unconditional: mean of `anc_trajectory` if non-empty, otherwise `0.0`.
     """
     n = len(anc_trajectory)
     return EpisodeMetrics(
@@ -66,13 +72,18 @@ class AggregateMetrics:
 
 
 def compute_aggregate_metrics(episodes: Sequence[EpisodeMetrics]) -> AggregateMetrics:
-    """Aggregate a list of EpisodeMetrics into summary statistics.
-
-    For ``mean_anc_per_round``: episodes may have different lengths. At each round
-    index the mean is taken only over episodes that reached that round — no padding
-    with zeros or ones.
-
-    ``stderr = stdev / sqrt(n)`` where n is the number of contributing episodes.
+    """
+    Compute population-level summary statistics from a sequence of EpisodeMetrics.
+    
+    Per-round means are computed only over episodes that reached each round index (no padding). Standard error values use `stdev / sqrt(n)` when `n > 1`, otherwise `0.0`.
+    
+    Returns:
+        aggregate (AggregateMetrics): Dataclass containing:
+            - recovery counts and recovered fraction,
+            - mean and sample std of rounds-to-recovery (recovered episodes) and rounds-to-termination (failed episodes),
+            - conditional and unconditional ANC means with standard errors,
+            - per-round aligned ANC means and counts across all episodes,
+            - per-round ANC means and counts split by recovered vs failed episodes.
     """
     n = len(episodes)
 

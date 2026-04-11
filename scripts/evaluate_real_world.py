@@ -65,6 +65,17 @@ from scripts.reproducibility import write_run_metadata
 
 
 def load_checkpoint(path: Path) -> RecoveryQNetwork:
+    """
+    Load a RecoveryQNetwork checkpoint from the given file and return a model prepared for inference.
+    
+    Parameters:
+        path (Path): Filesystem path to a PyTorch checkpoint produced by training. The checkpoint must contain
+            `model_config` (used to reconstruct QNetworkConfig) and `model_state` (state dict of the network).
+    
+    Returns:
+        RecoveryQNetwork: A model instantiated with the saved configuration, its weights loaded, set to evaluation mode,
+        and moved to CPU.
+    """
     import torch
     from cascading_rl.models import QNetworkConfig
     data = torch.load(path, map_location="cpu", weights_only=False)
@@ -76,6 +87,22 @@ def load_checkpoint(path: Path) -> RecoveryQNetwork:
 
 
 def parse_args() -> argparse.Namespace:
+    """
+    Parse command-line arguments for evaluating a trained recovery policy on real-world graphs.
+    
+    Parameters:
+        checkpoint: Path to the model checkpoint file to load (default: experiments/learner/recovery_q.pt).
+        config: Path to the YAML configuration file (default: config/default.yaml).
+        datasets: List of dataset names to evaluate; each name selects a real-world graph (default: ['ieee300']).
+        seeds: List of integer failure seeds used to sample failure scenarios per graph (default: 0..19).
+        alpha: Optional override for regime capacity slack; if omitted the value is taken from the config's training.regime.alpha.
+        pfail: Optional override for per-element failure probability; if omitted the value is taken from training.regime.pfail.
+        budget: Optional override for recovery budget; if omitted the value is taken from training.regime.budget.
+        output_dir: Directory where evaluation outputs (summaries and metadata) will be written (default: experiments/eval_real_world).
+    
+    Returns:
+        argparse.Namespace: Parsed command-line arguments with attributes matching the listed parameters.
+    """
     parser = argparse.ArgumentParser(
         description="Evaluate trained policy on real-world network topologies."
     )
@@ -129,6 +156,22 @@ def parse_args() -> argparse.Namespace:
 
 
 def _fmt_summary(summary) -> dict:
+    """
+    Format a per-policy summary object into a JSON-serializable dictionary with rounded statistics.
+    
+    Parameters:
+        summary: An object with attributes `anc_fixed`, `final_nc`, `solved_fraction`, `rounds` (each exposing `.mean` and `.stderr` where applicable) and `episode_count`. 
+    
+    Returns:
+        A dict containing:
+            - "anc_fixed_mean": `anc_fixed.mean` rounded to 4 decimal places.
+            - "anc_fixed_stderr": `anc_fixed.stderr` rounded to 4 decimal places.
+            - "final_nc_mean": `final_nc.mean` rounded to 4 decimal places.
+            - "final_nc_stderr": `final_nc.stderr` rounded to 4 decimal places.
+            - "solved_fraction_mean": `solved_fraction.mean` rounded to 4 decimal places.
+            - "rounds_mean": `rounds.mean` rounded to 2 decimal places.
+            - "episode_count": the original `episode_count` value.
+    """
     return {
         "anc_fixed_mean": round(summary.anc_fixed.mean, 4),
         "anc_fixed_stderr": round(summary.anc_fixed.stderr, 4),
@@ -156,6 +199,24 @@ def evaluate_dataset(
     scale_budget: bool = True,
     scale_max_rounds: bool = True,
 ) -> None:
+    """
+    Evaluate a trained recovery policy and baseline policies on a single real-world graph topology and write per-dataset summary and metadata files.
+    
+    Parameters:
+        dataset_name (str): Name of the real-world dataset to load and evaluate.
+        model (RecoveryQNetwork): Trained Q-network used to build the RL greedy policy.
+        alpha (float): Regime parameter controlling node capacities (capacity = (1 + alpha) * degree).
+        pfail (float): Per-node failure probability for cascade initialization.
+        budget (int): Reference intervention budget (may be scaled by graph size).
+        max_rounds (int): Reference maximum rounds per episode (may be scaled by graph size).
+        seeds (list[int]): Sequence of random seeds used to generate matched failure scenarios.
+        output_dir (Path): Base directory where evaluation_summary.json and run_metadata.json will be written under a subdirectory named for the dataset.
+        checkpoint_path (Path): Path to the model checkpoint; recorded in run metadata.
+        config_path (Path): Path to the evaluation/training config; recorded in run metadata.
+        reference_n (int): Reference node count used when scaling budget and max_rounds (default: 40).
+        scale_budget (bool): If True, scale `budget` based on graph size relative to `reference_n` (default: True).
+        scale_max_rounds (bool): If True, scale `max_rounds` based on graph size relative to `reference_n` (default: True).
+    """
     import torch
     print(f"\n{'='*55}")
     print(f"Dataset: {dataset_name}")
@@ -288,6 +349,11 @@ def evaluate_dataset(
 
 
 def main() -> None:
+    """
+    Run the evaluation pipeline: parse CLI args, load config and checkpoint, and evaluate the model on each requested dataset.
+    
+    Reads runtime arguments and the YAML config to resolve evaluation regime parameters (with CLI overrides), loads the trained RecoveryQNetwork checkpoint, and invokes evaluate_dataset for every dataset in the arguments so that per-dataset summaries and run metadata are produced.
+    """
     args = parse_args()
 
     with args.config.open("r", encoding="utf-8") as f:

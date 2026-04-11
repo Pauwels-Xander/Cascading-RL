@@ -52,16 +52,42 @@ TOPOLOGY_HATCHES = {"ba": "", "er": "//", "ws": ".."}
 
 
 def _load(path: Path) -> dict:
+    """
+    Load and parse a JSON file from the given path.
+    
+    Parameters:
+        path (Path): Filesystem path to a JSON file.
+    
+    Returns:
+        dict: Parsed JSON content from the file.
+    """
     with path.open("r", encoding="utf-8") as f:
         return json.load(f)
 
 
 def _anc(summaries: dict, policy: str) -> tuple[float, float]:
+    """
+    Extract the ANC fixed-horizon mean and its standard error for a given policy from a summaries mapping.
+    
+    Parameters:
+        summaries (dict): Mapping from policy name to a summary dict that may contain
+            the keys `"anc_fixed_mean"` and `"anc_fixed_stderr"`.
+        policy (str): Policy key to look up in `summaries`.
+    
+    Returns:
+        tuple[float, float]: `(anc_fixed_mean, anc_fixed_stderr)` as floats. If the policy or either field is missing, `0.0` is returned for the missing value(s).
+    """
     s = summaries.get(policy, {})
     return float(s.get("anc_fixed_mean", 0.0)), float(s.get("anc_fixed_stderr", 0.0))
 
 
 def _spine_clean(ax):
+    """
+    Hide the top and right spines of the given Matplotlib axes.
+    
+    Parameters:
+        ax (matplotlib.axes.Axes): The axes whose top and right spines will be hidden.
+    """
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
 
@@ -71,6 +97,24 @@ def _spine_clean(ax):
 # ---------------------------------------------------------------------------
 
 def plot_topology_ablation(data: dict, out_dir: Path) -> Path:
+    """
+    Create and save a grouped bar chart comparing policies across network topologies.
+    
+    Generates a grouped bar chart where each group corresponds to a policy (ordered by POLICY_ORDER)
+    and each bar within a group corresponds to a topology (subset of ["ba", "er", "ws"] present in
+    data["topologies"]). Bar heights use `anc_fixed_mean` and error bars use `anc_fixed_stderr`
+    extracted from each topology's `summaries`. The plot is saved as `topology_ablation.png` under
+    the provided output directory.
+    
+    Parameters:
+        data (dict): Evaluation data with key "topologies" mapping topology keys to objects that
+            contain a "summaries" mapping of policy identifiers to summary entries. Each summary
+            should provide `anc_fixed_mean` and `anc_fixed_stderr`.
+        out_dir (Path): Directory where the PNG file will be written.
+    
+    Returns:
+        Path: Path to the saved `topology_ablation.png`.
+    """
     topologies = [t for t in ["ba", "er", "ws"] if t in data["topologies"]]
     policies   = [p for p in POLICY_ORDER if p in data["topologies"][topologies[0]]["summaries"]]
 
@@ -118,6 +162,19 @@ def plot_topology_ablation(data: dict, out_dir: Path) -> Path:
 # ---------------------------------------------------------------------------
 
 def plot_ood(data: dict, out_dir: Path) -> Path:
+    """
+    Create and save a bar chart comparing policies on the out-of-distribution IEEE 300-bus evaluation.
+    
+    Parameters:
+        data (dict): Evaluation data containing:
+            - "summaries": mapping from policy names to metric summaries (expects
+              entries with `anc_fixed_mean` and `anc_fixed_stderr`).
+            - "graph": object with "num_nodes" and "num_edges" for title context.
+        out_dir (Path): Directory where the PNG file will be written.
+    
+    Returns:
+        path (Path): Path to the saved PNG file.
+    """
     summaries = data["summaries"]
     policies  = [p for p in POLICY_ORDER if p in summaries]
 
@@ -154,6 +211,17 @@ def plot_ood(data: dict, out_dir: Path) -> Path:
 # ---------------------------------------------------------------------------
 
 def plot_combined(ablation_data: dict, ood_data: dict, out_dir: Path) -> Path:
+    """
+    Create and save a combined figure with two subplots: (a) topology ablation across available topologies and policies, and (b) out-of-distribution (OOD) evaluation for the IEEE 300-bus benchmark.
+    
+    Parameters:
+        ablation_data (dict): Parsed JSON-like data for the topology ablation tier. Expected to contain a "topologies" mapping where each topology has a "summaries" dict keyed by policy.
+        ood_data (dict): Parsed JSON-like data for the OOD tier. Expected to contain a "summaries" dict keyed by policy and a "graph" object with "num_nodes".
+        out_dir (Path): Directory where the resulting PNG ("combined_tiers.png") will be written.
+    
+    Returns:
+        Path: Filesystem path to the saved combined PNG image.
+    """
     topologies = [t for t in ["ba", "er", "ws"] if t in ablation_data["topologies"]]
     policies   = [p for p in POLICY_ORDER
                   if p in ablation_data["topologies"][topologies[0]]["summaries"]]
@@ -225,6 +293,11 @@ def plot_combined(ablation_data: dict, ood_data: dict, out_dir: Path) -> Path:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    """
+    Validate required evaluation JSON files, generate the three evaluation plots, and save them to the output directory.
+    
+    Creates OUT_DIR if it does not exist. If any required input JSON files are missing, prints their paths and exits the process with status code 1. Otherwise, loads the topology ablation and OOD evaluation summaries, invokes the plotting routines to produce the Tier 1, Tier 2, and combined figures, and prints the directory where plots were saved.
+    """
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
     missing = []
