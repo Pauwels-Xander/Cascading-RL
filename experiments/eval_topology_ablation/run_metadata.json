@@ -1,10 +1,8 @@
 {
-  "generated_at": "2026-04-11T07:10:54.326678+00:00",
-  "script": "scripts/train_policy.py",
+  "generated_at": "2026-04-11T08:13:56.598081+00:00",
+  "script": "scripts/evaluate_topology_ablation.py",
   "argv": [
-    "scripts/train_policy.py",
-    "--episodes",
-    "20000"
+    "scripts/evaluate_topology_ablation.py"
   ],
   "config_path": "config/default.yaml",
   "config_sha256": "9ef8e2e299344771ca1f325d8536162cad0a81e1b564ebe3c891a0ec909d02aa",
@@ -12,6 +10,5 @@
   "python_version": "3.14.3 (v3.14.3:323c59a5e34, Feb  3 2026, 11:41:37) [Clang 16.0.0 (clang-1600.0.26.6)]",
   "platform": "macOS-26.3.1-arm64-arm-64bit-Mach-O",
   "torch_version": "2.11.0",
-  "checkpoint_path": "experiments/learner/recovery_q.pt",
-  "summary_path": "experiments/learner/recovery_q.summary.json"
+  "summary_path": "experiments/eval_topology_ablation/topology_ablation_summary.json"
 }

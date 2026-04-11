@@ -92,8 +92,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--datasets",
         nargs="+",
-        default=["ieee300", "watts_strogatz"],
-        help="Which datasets to evaluate (default: ieee300 watts_strogatz).",
+        default=["ieee300"],
+        help="Which datasets to evaluate (default: ieee300).",
     )
     parser.add_argument(
         "--seeds",

@@ -19,6 +19,30 @@ def make_ba_graph(n: int = 40, m: int = 2, seed: int | None = None) -> nx.Graph:
     return nx.barabasi_albert_graph(n=n, m=m, seed=seed)
 
 
+def make_ws_graph(n: int = 40, m: int = 2, p: float = 0.1, seed: int | None = None) -> nx.Graph:
+    """Generate a Watts-Strogatz small-world graph with average degree matched to BA.
+
+    Uses k = 2*m nearest neighbours (giving average degree 2m = that of BA/ER graphs)
+    and rewiring probability p=0.1 to produce small-world structure (high clustering,
+    short paths) while preserving connectivity.
+
+    Parameters
+    ----------
+    n : number of nodes
+    m : BA-equivalent parameter; k = 2*m neighbours in the ring lattice
+    p : rewiring probability (default 0.1)
+    seed : RNG seed for reproducibility
+    """
+    if n < 2:
+        raise ValueError("n must be at least 2.")
+    if m < 1:
+        raise ValueError("m must be at least 1.")
+    k = 2 * m  # ring neighbours, gives average degree = k = 2m
+    if k >= n:
+        raise ValueError(f"k=2*m={k} must be less than n={n}.")
+    return nx.watts_strogatz_graph(n=n, k=k, p=p, seed=seed)
+
+
 def make_er_graph(n: int = 40, m: int = 2, seed: int | None = None) -> nx.Graph:
     """Generate an Erdos-Renyi graph with edge probability matched to BA average degree.
 
@@ -58,18 +82,26 @@ def make_graph_batch(
 
     Parameters
     ----------
-    graph_type : "ba" (Barabasi-Albert, default) or "er" (Erdos-Renyi).
-        ER graphs use edge probability p = 2*m/n to match BA average degree.
+    graph_type : "ba" (Barabasi-Albert, default), "er" (Erdos-Renyi), or "ws" (Watts-Strogatz).
+        All types target average degree 2*m:
+        - BA : preferential attachment, scale-free degree distribution
+        - ER : random, p = 2*m/n
+        - WS : small-world ring lattice with k=2*m neighbours, p=0.1 rewiring
     """
     if num_graphs < 1:
         raise ValueError("num_graphs must be at least 1.")
     min_n, max_n = n_range
     if min_n > max_n:
         raise ValueError("n_range must be ordered as (min_n, max_n).")
-    if graph_type not in ("ba", "er"):
-        raise ValueError(f"graph_type must be 'ba' or 'er', got '{graph_type}'.")
+    if graph_type not in ("ba", "er", "ws"):
+        raise ValueError(f"graph_type must be 'ba', 'er', or 'ws', got '{graph_type}'.")
 
-    make_fn = make_ba_graph if graph_type == "ba" else make_er_graph
+    if graph_type == "ba":
+        make_fn = make_ba_graph
+    elif graph_type == "er":
+        make_fn = make_er_graph
+    else:
+        make_fn = make_ws_graph
     rng = Random(seed)
     graphs: list[nx.Graph] = []
     for graph_index in range(num_graphs):

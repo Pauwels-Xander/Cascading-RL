@@ -1,0 +1,114 @@
+{
+  "dataset": "ieee300",
+  "graph": {
+    "num_nodes": 300,
+    "num_edges": 409,
+    "avg_degree": 2.727,
+    "cascade_model_note": "Load = node degree, capacity = (1+alpha)*degree. Stylized model \u2014 not physics-accurate for power grids."
+  },
+  "regime": {
+    "alpha": 0.15,
+    "pfail": 0.18,
+    "budget": 2,
+    "max_rounds": 20,
+    "num_seeds": 20
+  },
+  "summaries": {
+    "rl": {
+      "anc_fixed_mean": 0.0083,
+      "anc_fixed_stderr": 0.0009,
+      "final_nc_mean": 0.0097,
+      "final_nc_stderr": 0.001,
+      "solved_fraction_mean": 0.0,
+      "rounds_mean": 20.0,
+      "episode_count": 20
+    },
+    "random": {
+      "anc_fixed_mean": 0.0019,
+      "anc_fixed_stderr": 0.0002,
+      "final_nc_mean": 0.0006,
+      "final_nc_stderr": 0.0,
+      "solved_fraction_mean": 0.0,
+      "rounds_mean": 20.0,
+      "episode_count": 20
+    },
+    "degree": {
+      "anc_fixed_mean": 0.0034,
+      "anc_fixed_stderr": 0.0003,
+      "final_nc_mean": 0.0023,
+      "final_nc_stderr": 0.0001,
+      "solved_fraction_mean": 0.0,
+      "rounds_mean": 20.0,
+      "episode_count": 20
+    },
+    "risk": {
+      "anc_fixed_mean": 0.0048,
+      "anc_fixed_stderr": 0.0004,
+      "final_nc_mean": 0.0073,
+      "final_nc_stderr": 0.0004,
+      "solved_fraction_mean": 0.0,
+      "rounds_mean": 20.0,
+      "episode_count": 20
+    },
+    "greedy": {
+      "anc_fixed_mean": 0.0224,
+      "anc_fixed_stderr": 0.0021,
+      "final_nc_mean": 0.0377,
+      "final_nc_stderr": 0.0031,
+      "solved_fraction_mean": 0.0,
+      "rounds_mean": 20.0,
+      "episode_count": 20
+    },
+    "betweenness": {
+      "anc_fixed_mean": 0.0064,
+      "anc_fixed_stderr": 0.0003,
+      "final_nc_mean": 0.0153,
+      "final_nc_stderr": 0.0003,
+      "solved_fraction_mean": 0.0,
+      "rounds_mean": 20.0,
+      "episode_count": 20
+    }
+  },
+  "comparisons_vs_degree": [
+    {
+      "policy": "greedy",
+      "mean_diff_anc_fixed": 0.019,
+      "ci_95_low": 0.0154,
+      "ci_95_high": 0.0232,
+      "wilcoxon_p": 0.0,
+      "significant_p005": true
+    },
+    {
+      "policy": "rl",
+      "mean_diff_anc_fixed": 0.0049,
+      "ci_95_low": 0.0036,
+      "ci_95_high": 0.0065,
+      "wilcoxon_p": 0.0,
+      "significant_p005": true
+    },
+    {
+      "policy": "betweenness",
+      "mean_diff_anc_fixed": 0.0031,
+      "ci_95_low": 0.0026,
+      "ci_95_high": 0.0035,
+      "wilcoxon_p": 0.0,
+      "significant_p005": true
+    },
+    {
+      "policy": "risk",
+      "mean_diff_anc_fixed": 0.0014,
+      "ci_95_low": 0.0009,
+      "ci_95_high": 0.002,
+      "wilcoxon_p": 0.0001,
+      "significant_p005": true
+    },
+    {
+      "policy": "random",
+      "mean_diff_anc_fixed": -0.0015,
+      "ci_95_low": -0.0018,
+      "ci_95_high": -0.0012,
+      "wilcoxon_p": 0.0,
+      "significant_p005": true
+    }
+  ]
+}

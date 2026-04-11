@@ -1,0 +1,325 @@
+{
+  "tier": "topology_ablation",
+  "description": "BA vs ER vs WS at n\u2208[30,50] with matched average degree (~4)",
+  "regime": {
+    "alpha": 0.15,
+    "pfail": 0.18,
+    "budget": 2,
+    "max_rounds": 20
+  },
+  "graph_params": {
+    "n_range": [
+      30,
+      50
+    ],
+    "m": 2,
+    "avg_degree_target": 4,
+    "ws_k": 4,
+    "ws_p": 0.1,
+    "er_p_formula": "2*m/n",
+    "num_graphs_per_topology": 100,
+    "num_seeds": 10
+  },
+  "topologies": {
+    "ba": {
+      "summaries": {
+        "rl": {
+          "anc_fixed_mean": 0.7252,
+          "anc_fixed_stderr": 0.007,
+          "final_nc_mean": 0.9936,
+          "final_nc_stderr": 0.001,
+          "solved_fraction_mean": 0.944,
+          "rounds_mean": 11.55,
+          "episode_count": 1000
+        },
+        "random": {
+          "anc_fixed_mean": 0.2988,
+          "anc_fixed_stderr": 0.0091,
+          "final_nc_mean": 0.7182,
+          "final_nc_stderr": 0.0055,
+          "solved_fraction_mean": 0.144,
+          "rounds_mean": 17.46,
+          "episode_count": 1000
+        },
+        "degree": {
+          "anc_fixed_mean": 0.6735,
+          "anc_fixed_stderr": 0.008,
+          "final_nc_mean": 0.9733,
+          "final_nc_stderr": 0.0023,
+          "solved_fraction_mean": 0.851,
+          "rounds_mean": 12.62,
+          "episode_count": 1000
+        },
+        "risk": {
+          "anc_fixed_mean": 0.4066,
+          "anc_fixed_stderr": 0.0095,
+          "final_nc_mean": 0.8306,
+          "final_nc_stderr": 0.0048,
+          "solved_fraction_mean": 0.305,
+          "rounds_mean": 16.53,
+          "episode_count": 1000
+        },
+        "greedy": {
+          "anc_fixed_mean": 0.7759,
+          "anc_fixed_stderr": 0.006,
+          "final_nc_mean": 0.9989,
+          "final_nc_stderr": 0.0003,
+          "solved_fraction_mean": 0.986,
+          "rounds_mean": 10.35,
+          "episode_count": 1000
+        },
+        "betweenness": {
+          "anc_fixed_mean": 0.6626,
+          "anc_fixed_stderr": 0.0082,
+          "final_nc_mean": 0.9685,
+          "final_nc_stderr": 0.0025,
+          "solved_fraction_mean": 0.823,
+          "rounds_mean": 12.82,
+          "episode_count": 1000
+        }
+      },
+      "comparisons_vs_degree": [
+        {
+          "policy": "greedy",
+          "mean_diff_anc_fixed": 0.1025,
+          "ci_95_low": 0.0953,
+          "ci_95_high": 0.1098,
+          "wilcoxon_p": 0.0,
+          "significant_p005": true
+        },
+        {
+          "policy": "rl",
+          "mean_diff_anc_fixed": 0.0518,
+          "ci_95_low": 0.0446,
+          "ci_95_high": 0.0589,
+          "wilcoxon_p": 0.0,
+          "significant_p005": true
+        },
+        {
+          "policy": "betweenness",
+          "mean_diff_anc_fixed": -0.0109,
+          "ci_95_low": -0.0165,
+          "ci_95_high": -0.0053,
+          "wilcoxon_p": 0.0004,
+          "significant_p005": true
+        },
+        {
+          "policy": "risk",
+          "mean_diff_anc_fixed": -0.2669,
+          "ci_95_low": -0.2814,
+          "ci_95_high": -0.2523,
+          "wilcoxon_p": 0.0,
+          "significant_p005": true
+        },
+        {
+          "policy": "random",
+          "mean_diff_anc_fixed": -0.3747,
+          "ci_95_low": -0.3912,
+          "ci_95_high": -0.3577,
+          "wilcoxon_p": 0.0,
+          "significant_p005": true
+        }
+      ]
+    },
+    "er": {
+      "summaries": {
+        "rl": {
+          "anc_fixed_mean": 0.4242,
+          "anc_fixed_stderr": 0.008,
+          "final_nc_mean": 0.8866,
+          "final_nc_stderr": 0.0038,
+          "solved_fraction_mean": 0.385,
+          "rounds_mean": 17.13,
+          "episode_count": 1000
+        },
+        "random": {
+          "anc_fixed_mean": 0.2418,
+          "anc_fixed_stderr": 0.007,
+          "final_nc_mean": 0.6713,
+          "final_nc_stderr": 0.005,
+          "solved_fraction_mean": 0.079,
+          "rounds_mean": 18.51,
+          "episode_count": 1000
+        },
+        "degree": {
+          "anc_fixed_mean": 0.3694,
+          "anc_fixed_stderr": 0.0087,
+          "final_nc_mean": 0.7752,
+          "final_nc_stderr": 0.0045,
+          "solved_fraction_mean": 0.209,
+          "rounds_mean": 17.21,
+          "episode_count": 1000
+        },
+        "risk": {
+          "anc_fixed_mean": 0.311,
+          "anc_fixed_stderr": 0.0078,
+          "final_nc_mean": 0.762,
+          "final_nc_stderr": 0.0048,
+          "solved_fraction_mean": 0.154,
+          "rounds_mean": 17.96,
+          "episode_count": 1000
+        },
+        "greedy": {
+          "anc_fixed_mean": 0.5068,
+          "anc_fixed_stderr": 0.0078,
+          "final_nc_mean": 0.9522,
+          "final_nc_stderr": 0.0023,
+          "solved_fraction_mean": 0.629,
+          "rounds_mean": 16.19,
+          "episode_count": 1000
+        },
+        "betweenness": {
+          "anc_fixed_mean": 0.3725,
+          "anc_fixed_stderr": 0.0085,
+          "final_nc_mean": 0.7883,
+          "final_nc_stderr": 0.0045,
+          "solved_fraction_mean": 0.219,
+          "rounds_mean": 17.3,
+          "episode_count": 1000
+        }
+      },
+      "comparisons_vs_degree": [
+        {
+          "policy": "greedy",
+          "mean_diff_anc_fixed": 0.1374,
+          "ci_95_low": 0.1297,
+          "ci_95_high": 0.145,
+          "wilcoxon_p": 0.0,
+          "significant_p005": true
+        },
+        {
+          "policy": "rl",
+          "mean_diff_anc_fixed": 0.0548,
+          "ci_95_low": 0.0465,
+          "ci_95_high": 0.0628,
+          "wilcoxon_p": 0.0,
+          "significant_p005": true
+        },
+        {
+          "policy": "betweenness",
+          "mean_diff_anc_fixed": 0.0031,
+          "ci_95_low": -0.0027,
+          "ci_95_high": 0.0088,
+          "wilcoxon_p": 0.0,
+          "significant_p005": true
+        },
+        {
+          "policy": "risk",
+          "mean_diff_anc_fixed": -0.0585,
+          "ci_95_low": -0.0691,
+          "ci_95_high": -0.0483,
+          "wilcoxon_p": 0.0,
+          "significant_p005": true
+        },
+        {
+          "policy": "random",
+          "mean_diff_anc_fixed": -0.1277,
+          "ci_95_low": -0.1412,
+          "ci_95_high": -0.1142,
+          "wilcoxon_p": 0.0,
+          "significant_p005": true
+        }
+      ]
+    },
+    "ws": {
+      "summaries": {
+        "rl": {
+          "anc_fixed_mean": 0.46,
+          "anc_fixed_stderr": 0.0079,
+          "final_nc_mean": 0.9301,
+          "final_nc_stderr": 0.0031,
+          "solved_fraction_mean": 0.563,
+          "rounds_mean": 16.78,
+          "episode_count": 1000
+        },
+        "random": {
+          "anc_fixed_mean": 0.2177,
+          "anc_fixed_stderr": 0.0069,
+          "final_nc_mean": 0.6441,
+          "final_nc_stderr": 0.006,
+          "solved_fraction_mean": 0.075,
+          "rounds_mean": 18.74,
+          "episode_count": 1000
+        },
+        "degree": {
+          "anc_fixed_mean": 0.3475,
+          "anc_fixed_stderr": 0.0089,
+          "final_nc_mean": 0.7591,
+          "final_nc_stderr": 0.0049,
+          "solved_fraction_mean": 0.225,
+          "rounds_mean": 17.49,
+          "episode_count": 1000
+        },
+        "risk": {
+          "anc_fixed_mean": 0.4215,
+          "anc_fixed_stderr": 0.0084,
+          "final_nc_mean": 0.8772,
+          "final_nc_stderr": 0.0045,
+          "solved_fraction_mean": 0.415,
+          "rounds_mean": 16.97,
+          "episode_count": 1000
+        },
+        "greedy": {
+          "anc_fixed_mean": 0.6076,
+          "anc_fixed_stderr": 0.0063,
+          "final_nc_mean": 0.9965,
+          "final_nc_stderr": 0.0006,
+          "solved_fraction_mean": 0.954,
+          "rounds_mean": 14.64,
+          "episode_count": 1000
+        },
+        "betweenness": {
+          "anc_fixed_mean": 0.3626,
+          "anc_fixed_stderr": 0.0089,
+          "final_nc_mean": 0.7618,
+          "final_nc_stderr": 0.0044,
+          "solved_fraction_mean": 0.201,
+          "rounds_mean": 17.22,
+          "episode_count": 1000
+        }
+      },
+      "comparisons_vs_degree": [
+        {
+          "policy": "greedy",
+          "mean_diff_anc_fixed": 0.2601,
+          "ci_95_low": 0.2507,
+          "ci_95_high": 0.2695,
+          "wilcoxon_p": 0.0,
+          "significant_p005": true
+        },
+        {
+          "policy": "rl",
+          "mean_diff_anc_fixed": 0.1126,
+          "ci_95_low": 0.103,
+          "ci_95_high": 0.122,
+          "wilcoxon_p": 0.0,
+          "significant_p005": true
+        },
+        {
+          "policy": "risk",
+          "mean_diff_anc_fixed": 0.074,
+          "ci_95_low": 0.066,
+          "ci_95_high": 0.082,
+          "wilcoxon_p": 0.0,
+          "significant_p005": true
+        },
+        {
+          "policy": "betweenness",
+          "mean_diff_anc_fixed": 0.0151,
+          "ci_95_low": 0.0087,
+          "ci_95_high": 0.0216,
+          "wilcoxon_p": 0.0,
+          "significant_p005": true
+        },
+        {
+          "policy": "random",
+          "mean_diff_anc_fixed": -0.1297,
+          "ci_95_low": -0.1436,
+          "ci_95_high": -0.1168,
+          "wilcoxon_p": 0.0,
+          "significant_p005": true
+        }
+      ]
+    }
+  }
+}
