@@ -148,12 +148,14 @@ def main() -> None:
         download_ieee300()
     except Exception as exc:
         print(f"  ERROR: {exc}", file=sys.stderr)
+        sys.exit(1)
 
     print()
     try:
         generate_watts_strogatz()
     except Exception as exc:
         print(f"  ERROR: {exc}", file=sys.stderr)
+        sys.exit(1)
 
     print("\nDone. Run scripts/evaluate_real_world.py to evaluate the trained policy.")
 

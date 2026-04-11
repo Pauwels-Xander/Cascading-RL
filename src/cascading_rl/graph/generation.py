@@ -158,6 +158,12 @@ def load_real_world_graph(name: str, data_dir: Path | str | None = None) -> nx.G
     g = nx.Graph()
     g.add_edges_from(edges)
 
+    if g.number_of_nodes() == 0:
+        raise ValueError(
+            f"Real-world graph '{name}' loaded from {csv_path} contains no valid edges. "
+            "The CSV may be empty or contain only self-loops."
+        )
+
     # Ensure connectivity — keep largest component and re-index 0..N-1
     if not nx.is_connected(g):
         largest_cc = max(nx.connected_components(g), key=len)

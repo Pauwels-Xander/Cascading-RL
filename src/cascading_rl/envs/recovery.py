@@ -240,7 +240,11 @@ class RecoveryEnv:
 
         action_round = self.current_round
         action_index_in_round = self.budget - self.remaining_budget + 1
-        nc_before_action = normalized_connectivity(self.state.graph, self.state.active)
+        nc_before_action = (
+            normalized_connectivity(self.state.graph, self.state.active)
+            if not self.homogenize_reward
+            else None
+        )
         self.state = reactivate_node(self.state, action)
         self.remaining_budget -= 1
 
@@ -268,17 +272,6 @@ class RecoveryEnv:
         # nc_after_cascade == nc_after_reactivation (no cascade fired), so reward
         # equals the repair gain only. For the last step it includes cascade effects.
         # Denser signal, but introduces mixed Bellman targets.
-        if self.homogenize_reward:
-            if round_complete:
-                reward = nc_after_cascade - self._round_start_nc
-                self._round_start_nc = nc_after_cascade
-            else:
-                reward = 0.0
-        else:
-            reward = nc_after_cascade - nc_before_action
-            if round_complete:
-                self._round_start_nc = nc_after_cascade
-
         exhausted_rounds = action_round >= self.max_rounds
         abandoned = self._abandon_due_to_low_nc(nc_after_cascade)
         if not self.state.failed:
@@ -290,6 +283,17 @@ class RecoveryEnv:
             done = True
         else:
             done = False
+
+        if self.homogenize_reward:
+            if round_complete or done:
+                reward = nc_after_cascade - self._round_start_nc
+                self._round_start_nc = nc_after_cascade
+            else:
+                reward = 0.0
+        else:
+            reward = nc_after_cascade - nc_before_action
+            if round_complete:
+                self._round_start_nc = nc_after_cascade
 
         if round_complete and not done:
             self.current_round += 1

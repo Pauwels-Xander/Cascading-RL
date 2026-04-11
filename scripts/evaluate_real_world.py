@@ -153,6 +153,8 @@ def evaluate_dataset(
     checkpoint_path: Path,
     config_path: Path,
     reference_n: int = 40,
+    scale_budget: bool = True,
+    scale_max_rounds: bool = True,
 ) -> None:
     import torch
     print(f"\n{'='*55}")
@@ -170,8 +172,8 @@ def evaluate_dataset(
     avg_degree = 2 * m / n
 
     from cascading_rl.budgeting import compute_scaled_budget, compute_scaled_max_rounds
-    scaled_budget = compute_scaled_budget(budget, num_nodes=n, reference_n=reference_n, enabled=True)
-    scaled_max_rounds = compute_scaled_max_rounds(max_rounds, num_nodes=n, reference_n=reference_n, enabled=True)
+    scaled_budget = compute_scaled_budget(budget, num_nodes=n, reference_n=reference_n, enabled=scale_budget)
+    scaled_max_rounds = compute_scaled_max_rounds(max_rounds, num_nodes=n, reference_n=reference_n, enabled=scale_max_rounds)
 
     print(f"  Nodes: {n}  Edges: {m}  Avg degree: {avg_degree:.2f}")
     print(f"  Regime: alpha={alpha}, pfail={pfail}, budget={budget} -> scaled={scaled_budget}, "
@@ -197,8 +199,8 @@ def evaluate_dataset(
         budget=budget,
         max_rounds=max_rounds,
         seeds=seeds,
-        scale_budget=True,
-        scale_max_rounds=True,
+        scale_budget=scale_budget,
+        scale_max_rounds=scale_max_rounds,
         reference_n=reference_n,
     )
 
@@ -298,6 +300,8 @@ def main() -> None:
     budget = args.budget if args.budget is not None else int(regime["budget"])
     max_rounds = int(regime["max_rounds"])
     reference_n = int(budget_scaling.get("reference_n", 40))
+    scale_budget = bool(budget_scaling.get("enabled", True))
+    scale_max_rounds = bool(budget_scaling.get("scale_max_rounds", True))
 
     print(f"Loading checkpoint: {args.checkpoint}")
     model = load_checkpoint(args.checkpoint)
@@ -315,6 +319,8 @@ def main() -> None:
             checkpoint_path=args.checkpoint,
             config_path=args.config,
             reference_n=reference_n,
+            scale_budget=scale_budget,
+            scale_max_rounds=scale_max_rounds,
         )
 
     print("\nAll done.")
