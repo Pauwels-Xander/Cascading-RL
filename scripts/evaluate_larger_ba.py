@@ -46,10 +46,7 @@ from cascading_rl.models import RecoveryQNetwork, build_greedy_policy
 from cascading_rl.reproducibility import portable_artifact_path
 from scripts.reproducibility import write_run_metadata
 
-# Greedy is excluded at larger scales: its O(|failed| × steps) rollout cost
-# makes it computationally infeasible at n >= 100 (hours per size).
-# This is itself a meaningful finding: greedy does not scale, RL does.
-POLICY_ORDER = ["rl", "degree", "betweenness", "risk", "random"]
+POLICY_ORDER = ["rl", "greedy", "degree", "betweenness", "risk", "random"]
 
 
 def load_checkpoint(path: Path) -> RecoveryQNetwork:
@@ -151,11 +148,7 @@ def run_size(
 
     device = torch.device("cpu")
     rl_policy = build_greedy_policy(model, device=device, batch_actions=False)
-    # Exclude greedy: O(|failed| × steps) rollout cost is infeasible at n >= 100.
-    baseline_factories = {
-        k: v for k, v in build_policy_factories(base_seed=0).items()
-        if k != "greedy"
-    }
+    baseline_factories = build_policy_factories(base_seed=0)
     policy_factories = {
         "rl": lambda gi, se: rl_policy,
         **baseline_factories,

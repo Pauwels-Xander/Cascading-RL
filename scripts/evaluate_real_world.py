@@ -152,6 +152,7 @@ def evaluate_dataset(
     output_dir: Path,
     checkpoint_path: Path,
     config_path: Path,
+    reference_n: int = 40,
 ) -> None:
     import torch
     print(f"\n{'='*55}")
@@ -167,8 +168,14 @@ def evaluate_dataset(
     n = graph.number_of_nodes()
     m = graph.number_of_edges()
     avg_degree = 2 * m / n
+
+    from cascading_rl.budgeting import compute_scaled_budget, compute_scaled_max_rounds
+    scaled_budget = compute_scaled_budget(budget, num_nodes=n, reference_n=reference_n, enabled=True)
+    scaled_max_rounds = compute_scaled_max_rounds(max_rounds, num_nodes=n, reference_n=reference_n, enabled=True)
+
     print(f"  Nodes: {n}  Edges: {m}  Avg degree: {avg_degree:.2f}")
-    print(f"  Regime: alpha={alpha}, pfail={pfail}, budget={budget}, max_rounds={max_rounds}")
+    print(f"  Regime: alpha={alpha}, pfail={pfail}, budget={budget} -> scaled={scaled_budget}, "
+          f"max_rounds={max_rounds} -> scaled={scaled_max_rounds}")
     print(f"  Seeds: {len(seeds)}")
 
     device = torch.device("cpu")
@@ -190,8 +197,9 @@ def evaluate_dataset(
         budget=budget,
         max_rounds=max_rounds,
         seeds=seeds,
-        scale_budget=False,   # real graphs are not scaled — use budget as-is
-        scale_max_rounds=False,
+        scale_budget=True,
+        scale_max_rounds=True,
+        reference_n=reference_n,
     )
 
     summaries = {
@@ -223,8 +231,11 @@ def evaluate_dataset(
         "regime": {
             "alpha": alpha,
             "pfail": pfail,
-            "budget": budget,
-            "max_rounds": max_rounds,
+            "budget_ref": budget,
+            "budget_scaled": scaled_budget,
+            "max_rounds_ref": max_rounds,
+            "max_rounds_scaled": scaled_max_rounds,
+            "reference_n": reference_n,
             "num_seeds": len(seeds),
         },
         "summaries": {name: _fmt_summary(s) for name, s in summaries.items()},
@@ -281,10 +292,12 @@ def main() -> None:
         cfg = yaml.safe_load(f)
 
     regime = cfg["training"]["regime"]
+    budget_scaling = cfg.get("budget_scaling", {})
     alpha = args.alpha if args.alpha is not None else float(regime["alpha"])
     pfail = args.pfail if args.pfail is not None else float(regime["pfail"])
     budget = args.budget if args.budget is not None else int(regime["budget"])
     max_rounds = int(regime["max_rounds"])
+    reference_n = int(budget_scaling.get("reference_n", 40))
 
     print(f"Loading checkpoint: {args.checkpoint}")
     model = load_checkpoint(args.checkpoint)
@@ -301,6 +314,7 @@ def main() -> None:
             output_dir=args.output_dir,
             checkpoint_path=args.checkpoint,
             config_path=args.config,
+            reference_n=reference_n,
         )
 
     print("\nAll done.")
