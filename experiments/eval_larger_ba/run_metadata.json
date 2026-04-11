@@ -1,0 +1,21 @@
+{
+  "generated_at": "2026-04-11T09:43:36.674420+00:00",
+  "script": "scripts/evaluate_larger_ba.py",
+  "argv": [
+    "scripts/evaluate_larger_ba.py",
+    "--sizes",
+    "100",
+    "--num-graphs",
+    "2",
+    "--seeds",
+    "0",
+    "1"
+  ],
+  "config_path": "config/default.yaml",
+  "config_sha256": "9ef8e2e299344771ca1f325d8536162cad0a81e1b564ebe3c891a0ec909d02aa",
+  "git_commit": "9bf440ececbc782d1fb7dc0141a5fe388e9e72c4",
+  "python_version": "3.14.3 (v3.14.3:323c59a5e34, Feb  3 2026, 11:41:37) [Clang 16.0.0 (clang-1600.0.26.6)]",
+  "platform": "macOS-26.3.1-arm64-arm-64bit-Mach-O",
+  "torch_version": "2.11.0",
+  "summary_path": "experiments/eval_larger_ba/larger_ba_summary.json"
+}

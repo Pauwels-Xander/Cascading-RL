@@ -1,0 +1,106 @@
+{
+  "description": "Scale generalisation: BA graphs at n=100, 200, 500 (all OOD)",
+  "training_range": [
+    30,
+    50
+  ],
+  "regime": {
+    "alpha": 0.15,
+    "pfail": 0.18,
+    "budget_ref": 2,
+    "budget_scaled": true,
+    "reference_n": 40,
+    "max_rounds": 20
+  },
+  "graph_params": {
+    "m": 2,
+    "num_graphs_per_size": 2,
+    "num_seeds": 2
+  },
+  "sizes": {
+    "100": {
+      "n": 100,
+      "summaries": {
+        "rl": {
+          "anc_fixed_mean": 0.9832,
+          "anc_fixed_stderr": 0.0107,
+          "final_nc_mean": 1.0,
+          "final_nc_stderr": 0.0,
+          "solved_fraction_mean": 1.0,
+          "rounds_mean": 4.25,
+          "episode_count": 4
+        },
+        "random": {
+          "anc_fixed_mean": 0.8325,
+          "anc_fixed_stderr": 0.0959,
+          "final_nc_mean": 1.0,
+          "final_nc_stderr": 0.0,
+          "solved_fraction_mean": 1.0,
+          "rounds_mean": 13.0,
+          "episode_count": 4
+        },
+        "degree": {
+          "anc_fixed_mean": 0.9805,
+          "anc_fixed_stderr": 0.0101,
+          "final_nc_mean": 1.0,
+          "final_nc_stderr": 0.0,
+          "solved_fraction_mean": 1.0,
+          "rounds_mean": 5.0,
+          "episode_count": 4
+        },
+        "risk": {
+          "anc_fixed_mean": 0.7611,
+          "anc_fixed_stderr": 0.0799,
+          "final_nc_mean": 1.0,
+          "final_nc_stderr": 0.0,
+          "solved_fraction_mean": 1.0,
+          "rounds_mean": 17.25,
+          "episode_count": 4
+        },
+        "betweenness": {
+          "anc_fixed_mean": 0.9761,
+          "anc_fixed_stderr": 0.014,
+          "final_nc_mean": 1.0,
+          "final_nc_stderr": 0.0,
+          "solved_fraction_mean": 1.0,
+          "rounds_mean": 5.25,
+          "episode_count": 4
+        }
+      },
+      "comparisons_vs_degree": [
+        {
+          "policy": "rl",
+          "mean_diff_anc_fixed": 0.0027,
+          "ci_95_low": -0.0041,
+          "ci_95_high": 0.0113,
+          "wilcoxon_p": 0.625,
+          "significant_p005": false
+        },
+        {
+          "policy": "betweenness",
+          "mean_diff_anc_fixed": -0.0044,
+          "ci_95_low": -0.0162,
+          "ci_95_high": 0.0037,
+          "wilcoxon_p": 0.75,
+          "significant_p005": false
+        },
+        {
+          "policy": "random",
+          "mean_diff_anc_fixed": -0.148,
+          "ci_95_low": -0.2968,
+          "ci_95_high": 0.0008,
+          "wilcoxon_p": 0.625,
+          "significant_p005": false
+        },
+        {
+          "policy": "risk",
+          "mean_diff_anc_fixed": -0.2194,
+          "ci_95_low": -0.3236,
+          "ci_95_high": -0.0692,
+          "wilcoxon_p": 0.125,
+          "significant_p005": false
+        }
+      ]
+    }
+  }
+}
