@@ -70,7 +70,7 @@ DEFAULT_ALPHA = [0.10, 0.20, 0.25, 0.30]   # 0.25 = training alpha
 DEFAULT_PFAIL = [0.05, 0.15, 0.20, 0.25]   # 0.20 = training pfail
 DEFAULT_BUDGET = [1, 2, 3]                  # budget=2 = training budget
 DEFAULT_NUM_GRAPHS = 40
-DEFAULT_SEEDS = list(range(10))
+DEFAULT_SEEDS = list(range(5))
 
 POLICY_PRINT_ORDER = ["rl", "greedy", "degree", "betweenness", "risk", "random"]
 
