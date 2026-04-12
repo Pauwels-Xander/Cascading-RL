@@ -69,8 +69,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--alpha",  type=float, nargs="+", default=DEFAULT_ALPHA)
     p.add_argument("--pfail",  type=float, nargs="+", default=DEFAULT_PFAIL)
     p.add_argument("--budget", type=int,   nargs="+", default=DEFAULT_BUDGET)
-    p.add_argument("--num-graphs", type=int, default=100,
-                   help="Graphs per cell for Tiers 1a/1b/1d/1e (default: 100).")
+    p.add_argument("--num-graphs", type=int, default=40,
+                   help="Graphs per cell for Tiers 1a/1b/1d/1e (default: 40).")
     p.add_argument("--seeds", type=int, nargs="+", default=list(range(10)),
                    help="Failure seeds for in-dist and topo ablation (default: 0..9).")
     p.add_argument("--ood-seeds", type=int, nargs="+", default=list(range(20)),
