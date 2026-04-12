@@ -8,11 +8,12 @@ All 6 policies are evaluated: rl, greedy, degree, betweenness, risk, random.
 
 Grid (defaults, all overridable via CLI)
 ----------------------------------------
-  alpha   : [0.10, 0.20, 0.30]  -- low / mid / high capacity slack
-  pfail   : [0.05, 0.15, 0.25]  -- low / mid / high failure rate
-  budget  : [1, 2, 3, 4]        -- repair actions per round
+  alpha   : [0.10, 0.20, 0.25, 0.30]  -- low / mid / train / high capacity slack
+  pfail   : [0.05, 0.15, 0.20, 0.25]  -- low / mid / train / high failure rate
+  budget  : [1, 2, 3, 4]              -- budget=2 is training budget
 
-Total default cells : 3 x 3 x 4 = 36
+Total default cells : 4 x 4 x 3 = 48
+Training cell       : alpha=0.25, pfail=0.20, budget=2  (flagged is_training_params=True)
 Graphs              : 100, n ~ Uniform[20, 50] (shared across all cells)
 Seeds per graph     : 10
 Episodes per cell   : 1 000
@@ -65,9 +66,9 @@ from scripts.reproducibility import write_run_metadata
 
 N_LOW = 30
 N_HIGH = 50
-DEFAULT_ALPHA = [0.10, 0.20, 0.30]
-DEFAULT_PFAIL = [0.05, 0.15, 0.25]
-DEFAULT_BUDGET = [1, 2, 3, 4]
+DEFAULT_ALPHA = [0.10, 0.20, 0.25, 0.30]   # 0.25 = training alpha
+DEFAULT_PFAIL = [0.05, 0.15, 0.20, 0.25]   # 0.20 = training pfail
+DEFAULT_BUDGET = [1, 2, 3]                  # budget=2 = training budget
 DEFAULT_NUM_GRAPHS = 100
 DEFAULT_SEEDS = list(range(10))
 

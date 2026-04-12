@@ -29,10 +29,10 @@ Six tiers, all driven by the same (alpha, pfail, budget) grid:
 
 Grid (matches evaluate_param_generalization.py defaults)
 ---------------------------------------------------------
-  alpha  : [0.10, 0.20, 0.30]        -- low / mid / high capacity slack
-  pfail  : [0.05, 0.15, 0.25]        -- low / mid / high failure rate
-  budget : [1, 2, 3, 4]
-  Total  : 36 cells
+  alpha  : [0.10, 0.20, 0.25, 0.30]  -- low / mid / train / high capacity slack
+  pfail  : [0.05, 0.15, 0.20, 0.25]  -- low / mid / train / high failure rate
+  budget : [1, 2, 3]                 -- budget=2 is training budget
+  Total  : 48 cells  (training cell: alpha=0.25, pfail=0.20, budget=2)
 
 Usage
 -----
@@ -56,9 +56,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-DEFAULT_ALPHA  = [0.10, 0.20, 0.30]
-DEFAULT_PFAIL  = [0.05, 0.15, 0.25]
-DEFAULT_BUDGET = [1, 2, 3, 4]
+DEFAULT_ALPHA  = [0.10, 0.20, 0.25, 0.30]   # 0.25 = training alpha
+DEFAULT_PFAIL  = [0.05, 0.15, 0.20, 0.25]   # 0.20 = training pfail
+DEFAULT_BUDGET = [1, 2, 3]                  # budget=2 = training budget
 
 
 def parse_args() -> argparse.Namespace:
