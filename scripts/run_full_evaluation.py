@@ -11,8 +11,9 @@ Six tiers, all driven by the same (alpha, pfail, budget) grid:
              Output: experiments/eval_topology_ablation/a{alpha}_p{pfail}_b{budget}/
 
   Tier 1c — Large BA param grid          (evaluate_param_generalization.py)
-             BA n∈[100,500] — tests size generalisation. One invocation.
-             Output: experiments/eval_param_generalization/ba_100_500/
+             BA n∈[100,300] — tests size generalisation. One invocation.
+             Scaled down: 30 graphs, 5 seeds (vs 100/10 for small graphs).
+             Output: experiments/eval_param_generalization/ba_100_300/
 
   Tier 1d — ER param grid                (evaluate_param_generalization.py)
              Erdős-Rényi n∈[30,50]. One invocation.
@@ -28,10 +29,10 @@ Six tiers, all driven by the same (alpha, pfail, budget) grid:
 
 Grid (matches evaluate_param_generalization.py defaults)
 ---------------------------------------------------------
-  alpha  : [0.10, 0.15, 0.20, 0.25, 0.30]
-  pfail  : [0.05, 0.10, 0.15, 0.20, 0.25]
+  alpha  : [0.10, 0.20, 0.30]        -- low / mid / high capacity slack
+  pfail  : [0.05, 0.15, 0.25]        -- low / mid / high failure rate
   budget : [1, 2, 3, 4]
-  Total  : 100 cells
+  Total  : 36 cells
 
 Usage
 -----
@@ -55,8 +56,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-DEFAULT_ALPHA  = [0.10, 0.15, 0.20, 0.25, 0.30]
-DEFAULT_PFAIL  = [0.05, 0.10, 0.15, 0.20, 0.25]
+DEFAULT_ALPHA  = [0.10, 0.20, 0.30]
+DEFAULT_PFAIL  = [0.05, 0.15, 0.25]
 DEFAULT_BUDGET = [1, 2, 3, 4]
 
 
@@ -69,11 +70,20 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--pfail",  type=float, nargs="+", default=DEFAULT_PFAIL)
     p.add_argument("--budget", type=int,   nargs="+", default=DEFAULT_BUDGET)
     p.add_argument("--num-graphs", type=int, default=100,
-                   help="Graphs per cell for Tiers 1a and 1b (default: 100).")
+                   help="Graphs per cell for Tiers 1a/1b/1d/1e (default: 100).")
     p.add_argument("--seeds", type=int, nargs="+", default=list(range(10)),
                    help="Failure seeds for in-dist and topo ablation (default: 0..9).")
     p.add_argument("--ood-seeds", type=int, nargs="+", default=list(range(20)),
                    help="Failure seeds for OOD real-world (default: 0..19).")
+    # Large-BA specific — scaled down to keep runtime manageable
+    p.add_argument("--large-ba-num-graphs", type=int, default=30,
+                   help="Graphs for Tier 1c large-BA sweep (default: 30).")
+    p.add_argument("--large-ba-seeds", type=int, nargs="+", default=list(range(5)),
+                   help="Failure seeds for Tier 1c (default: 0..4).")
+    p.add_argument("--large-ba-n-low", type=int, default=100,
+                   help="Min graph size for Tier 1c (default: 100).")
+    p.add_argument("--large-ba-n-high", type=int, default=300,
+                   help="Max graph size for Tier 1c (default: 300).")
     p.add_argument("--skip-indist",   action="store_true", help="Skip Tier 1a  (BA 30-50 in-dist).")
     p.add_argument("--skip-large-ba", action="store_true", help="Skip Tier 1c  (BA 100-500).")
     p.add_argument("--skip-er",       action="store_true", help="Skip Tier 1d  (ER 30-50).")
@@ -140,22 +150,25 @@ def main() -> None:
     # Tier 1c: param sweep on large BA graphs (n∈[100,500])
     # ------------------------------------------------------------------
     if not args.skip_large_ba:
+        large_ba_seeds_str = [str(s) for s in args.large_ba_seeds]
+        n_range_tag = f"{args.large_ba_n_low}_{args.large_ba_n_high}"
         print(f"\n{'='*60}")
-        print(f"TIER 1c — Large BA param grid: BA n∈[100,500] ({total_cells} cells)")
+        print(f"TIER 1c — Large BA param grid: BA n∈[{args.large_ba_n_low},{args.large_ba_n_high}] "
+              f"({total_cells} cells, {args.large_ba_num_graphs} graphs, {len(args.large_ba_seeds)} seeds)")
         print(f"{'='*60}")
         run([
             "scripts/evaluate_param_generalization.py",
             "--checkpoint", args.checkpoint,
             "--config",     args.config,
             "--graph-type", "ba",
-            "--n-low",      "100",
-            "--n-high",     "500",
+            "--n-low",      str(args.large_ba_n_low),
+            "--n-high",     str(args.large_ba_n_high),
             "--alpha",      *alpha_str,
             "--pfail",      *pfail_str,
             "--budget",     *budget_str,
-            "--num-graphs", str(args.num_graphs),
-            "--seeds",      *seeds_str,
-            "--output-dir", ROOT / "experiments" / "eval_param_generalization" / "ba_100_500",
+            "--num-graphs", str(args.large_ba_num_graphs),
+            "--seeds",      *large_ba_seeds_str,
+            "--output-dir", ROOT / "experiments" / "eval_param_generalization" / f"ba_{n_range_tag}",
         ])
 
     # ------------------------------------------------------------------
