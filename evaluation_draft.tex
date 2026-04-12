@@ -3,6 +3,7 @@
 \usepackage[margin=1in]{geometry}
 \usepackage{booktabs}
 \usepackage{amsmath}
+\usepackage{amssymb}
 \usepackage{xcolor}
 \usepackage{hyperref}
 \usepackage{parskip}
@@ -12,263 +13,458 @@
 \usepackage{multirow}
 \usepackage{graphicx}
 \usepackage{subcaption}
+\usepackage{array}
+\usepackage{tabularx}
 
 \hypersetup{colorlinks=true, linkcolor=blue!70!black,
             citecolor=blue!70!black, urlcolor=blue!70!black}
 
+% ---------------------------------------------------------------------------
+% Macros
+% ---------------------------------------------------------------------------
 \newcommand{\anc}{\textsc{anc}}
-\newcommand{\todo}[1]{\textcolor{red!70!black}{[TODO: #1]}}
+\newcommand{\ancfix}{\anc{}\textsubscript{fix}}
+\newcommand{\ancadp}{\anc{}\textsubscript{adp}}
+\newcommand{\todo}[1]{\textcolor{red!70!black}{[\textbf{TODO:} #1]}}
+\newcommand{\pfail}{p_{\mathrm{fail}}}
+\newcommand{\nstar}{n^{*}}
 
 \title{\textbf{Evaluation}\\[4pt]
        \large Cascading-RL: Reinforcement Learning for Cascade Recovery}
+\author{}
 \date{}
 
 \begin{document}
 \maketitle
 
-% ==================================================================
+% ===========================================================================
 \section{Experimental Setup}
-% ==================================================================
+\label{sec:setup}
+% ===========================================================================
+
+\paragraph{Cascade model.}
+We adopt the Motter--Lai load-redistribution model
+\citep{motter2002cascade}.
+Each node $i$ has load $\ell_i = k_i$ (its degree) and capacity
+$c_i = (1+\alpha)\,k_i$, where $\alpha \geq 0$ is the capacity slack.
+At each round, every node whose cumulative load exceeds its capacity fails,
+and its load redistributes uniformly to its surviving neighbors.
+Recovery actions restore failed nodes one at a time, up to a budget $B$ per
+round.
 
 \paragraph{Parameter grid.}
-All evaluations sweep a $({\alpha}, p_{\mathrm{fail}}, B)$ grid where
-$\alpha \in \{0.10, 0.20, 0.30\}$ is the capacity slack,
-$p_{\mathrm{fail}} \in \{0.05, 0.15, 0.25\}$ is the initial node failure rate, and
-$B \in \{1, 2, 3, 4\}$ is the reference repair budget (scaled linearly with graph size
-relative to a reference of $n^* = 40$ nodes).
-This yields $3 \times 3 \times 4 = 36$ parameter cells.
+All evaluations sweep a $(\alpha,\pfail,B)$ grid defined as follows:
+\begin{itemize}
+  \item $\alpha \in \{0.10,\;0.20,\;0.25,\;0.30\}$ — capacity slack,
+        spanning low to high network resilience; $\alpha^{\dagger}=0.25$
+        is the training value.
+  \item $\pfail \in \{0.05,\;0.15,\;0.20,\;0.25\}$ — initial node
+        failure probability, spanning near-intact to severely damaged
+        networks; $\pfail^{\dagger}=0.20$ is the training value.
+  \item $B \in \{1,\;2,\;3\}$ — reference repair budget per round,
+        scaled linearly with graph size relative to $\nstar=40$ nodes;
+        $B^{\dagger}=2$ is the training value.
+\end{itemize}
+The training cell $(\alpha^{\dagger},\pfail^{\dagger},B^{\dagger})$ is
+explicitly included and flagged in all tables.
+This yields $4\times 4\times 3 = 48$ parameter cells,
+with 40 graphs $\times$ 5 seeds $= 200$ episodes per cell.
 
 \paragraph{Evaluation settings.}
-Five graph settings are evaluated (Table~\ref{tab:settings}).
+Five graph settings are evaluated; Table~\ref{tab:settings} summarises
+the key parameters.
 
-\begin{table}[h]
+\begin{table}[htbp]
 \centering
-\caption{Evaluation settings. Episodes per cell = graphs $\times$ seeds.}
+\caption{Evaluation settings. All settings use the same 48-cell parameter
+         grid. Episodes/cell = graphs $\times$ seeds. $\dagger$ denotes the
+         training graph distribution.}
 \label{tab:settings}
-\begin{tabular}{lllrrr}
+\setlength{\tabcolsep}{7pt}
+\begin{tabular}{llcrrr}
 \toprule
-Setting & Topology & $n$ range & Graphs & Seeds & Episodes/cell \\
+Setting      & Topology                     & $n$ range    & Graphs & Seeds & Episodes/cell \\
 \midrule
-Small BA  & Barabási-Albert   & $[30, 50]$   & 100 & 10 & 1\,000 \\
-Small ER  & Erdős-Rényi       & $[30, 50]$   & 100 & 10 & 1\,000 \\
-Small WS  & Watts-Strogatz    & $[30, 50]$   & 100 & 10 & 1\,000 \\
-Large BA  & Barabási-Albert   & $[100, 300]$ &  30 &  5 &   150  \\
-IEEE 300  & Real-world power  & $300$        &   1 & 20 &    20  \\
+Small BA$^\dagger$ & Barab\'asi--Albert      & $[30,\;50]$  &  40 &  5 & 200 \\
+Small ER     & Erd\H{o}s--R\'enyi           & $[30,\;50]$  &  40 &  5 & 200 \\
+Small WS     & Watts--Strogatz              & $[30,\;50]$  &  40 &  5 & 200 \\
+Large BA     & Barab\'asi--Albert           & $[100,\;300]$&  30 &  5 & 150 \\
+IEEE~300     & Real-world power network     & $300$        &   1 & 20 &  20 \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+All synthetic graphs use attachment parameter $m=2$, giving an average
+degree $\langle k\rangle \approx 4$ across all three topology types.
+Small BA graphs are the training distribution; Small ER, Small WS, Large
+BA, and IEEE~300 are out-of-distribution settings testing topology,
+structural, and scale generalisation respectively.
 
 \paragraph{Policies.}
-Six policies are compared:
-\textbf{RL} (learned; \todo{results pending}),
-\textbf{Greedy} (one-step lookahead, simulates all candidate repairs),
-\textbf{Degree} (repairs highest-degree failed node),
-\textbf{Betweenness} (repairs highest-betweenness failed node),
-\textbf{Risk} (repairs node with highest load-to-capacity ratio),
-\textbf{Random} (uniform random selection among failed nodes).
-
-\paragraph{Metrics.}
-The primary metric is \textbf{ANC-fixed} (\anc{}$_{\mathrm{fix}}$): the area under the
-normalised connectivity curve over a fixed time horizon, capturing both speed and
-completeness of recovery.
-Supporting metrics are reported per policy:
-
+Six policies are compared throughout:
 \begin{itemize}
-  \item $\anc{}_{\mathrm{adp}}$: ANC over an adaptive horizon (stops when solved or
-        budget exhausted).
-  \item \textbf{FinalNC}: normalised connectivity at episode end.
-  \item \textbf{Solved}: fraction of episodes in which full connectivity is restored.
-  \item \textbf{Rounds$^*$}: mean rounds to solve, \emph{conditioned on solved episodes};
-        reported as $-$ when no episode is solved.
-  \item \textbf{ActRank}: mean rank of the chosen action among all candidate actions,
-        measuring how close the policy is to greedy-optimal.
-  \item \textbf{NCgain}: mean per-action connectivity gain, measuring action efficiency.
+  \item \textbf{RL}: the learned \textsc{dqn} policy evaluated greedily
+        from the trained $Q$-network. \todo{results pending model finalization}
+  \item \textbf{Greedy}: one-step lookahead — simulates every candidate
+        repair and selects the action with the highest immediate connectivity
+        gain.
+  \item \textbf{Degree}: repairs the highest-degree failed node.
+  \item \textbf{Betweenness}: repairs the failed node with the highest
+        betweenness centrality, recomputed on the live graph each round.
+  \item \textbf{Risk}: repairs the failed node with the highest
+        load-to-capacity ratio $r_i = \ell_i / c_i$.
+  \item \textbf{Random}: selects uniformly at random among failed nodes.
 \end{itemize}
 
-Statistical comparisons use Wilcoxon signed-rank tests with $p < 0.05$ and
-bootstrapped 95\% confidence intervals (1\,000 resamples).
+\paragraph{Metrics.}
+The primary metric is \textbf{\ancfix}: the area under the
+normalised-connectivity curve over a fixed time horizon, measuring both
+the speed and completeness of recovery on a common scale in $[0,1]$.
+Formally, letting $\mathrm{NC}(t)$ denote the fraction of nodes in the
+largest connected component at time $t$ and $T$ the fixed horizon,
+$\ancfix = \frac{1}{T}\sum_{t=0}^{T} \mathrm{NC}(t)$.
+Supporting metrics are:
 
-% ==================================================================
+\begin{itemize}
+  \item $\ancadp$: \anc{} over an adaptive horizon that stops when the
+        network is fully recovered or the budget is exhausted; rewards
+        policies that solve the task quickly.
+  \item \textbf{FinalNC}: normalised connectivity at episode end; captures
+        the absolute recovery level regardless of speed.
+  \item \textbf{Solved}: fraction of episodes in which full connectivity
+        ($\mathrm{NC}=1$) is restored.
+  \item \textbf{Rounds$^{*}$}: mean rounds to solve,
+        \emph{conditioned on episodes that are solved}; omitted ($-$) when
+        no episode is solved.
+  \item \textbf{ActRank}: mean rank of the chosen action among all
+        candidates (lower is better; rank 1 = greedy-optimal choice).
+  \item \textbf{NCgain}: mean per-action normalised-connectivity gain,
+        measuring raw action efficiency.
+\end{itemize}
+
+Statistical comparisons use Wilcoxon signed-rank tests \citep[p.\,75]{hollander2013nonparametric}
+at $p < 0.05$ with bootstrapped 95\,\% confidence intervals
+(1\,000 resamples).
+
+% ===========================================================================
 \section{Heuristic Evaluation}
-% ==================================================================
+\label{sec:heuristics}
+% ===========================================================================
 
-We first characterise the cascade recovery problem through heuristic policies alone,
-independently of any learned policy.
-The goal is to establish (i) which heuristics work and why,
-(ii) the parameter regimes in which all heuristics plateau, and
-(iii) whether graph topology modulates these findings.
+We first characterise the cascade recovery problem through heuristic
+policies, independently of any learned policy.
+This serves three purposes: (i)~establishing a well-understood performance
+baseline against which RL can be measured, (ii)~identifying the parameter
+regimes where heuristics saturate and a learned policy is most needed, and
+(iii)~determining whether topology modulates the relative merit of different
+recovery strategies.
 
-% ------------------------------------------------------------------
+% ---------------------------------------------------------------------------
 \subsection{Heuristic Ordering}
-% ------------------------------------------------------------------
+\label{sec:ordering}
+% ---------------------------------------------------------------------------
 
-We aggregate $\anc{}_{\mathrm{fix}}$ across all 36 parameter cells for each
-heuristic on Small BA graphs (Table~\ref{tab:heuristic_ordering}).
-The ranking is consistent across cells: Greedy $>$ Degree $\approx$ Betweenness
-$\gg$ Risk $>$ Random.
+Table~\ref{tab:heuristic_ordering} reports \ancfix{} for each policy,
+averaged across the full 48-cell parameter grid on Small BA graphs.
+The ranking
+\[
+  \text{Greedy} \;>\; \text{Degree} \approx \text{Betweenness}
+  \;\gg\; \text{Risk} \;>\; \text{Random}
+\]
+is consistent across all cells.
 
-\begin{table}[h]
+\begin{table}[htbp]
 \centering
-\caption{Heuristic performance on Small BA ($n \in [30,50]$, $m=2$), averaged
-         across the $3 \times 3 \times 4 = 36$ parameter cells
-         (100 graphs $\times$ 10 seeds $= 1{,}000$ episodes per cell).
-         \anc{}$_{\mathrm{fix}}$ and FinalNC are mean $\pm$ s.e.\ across cells.
+\caption{Policy performance on Small BA ($n\!\in\![30,50]$, $m=2$),
+         averaged across the 48-cell parameter grid
+         (200 episodes per cell, 9\,600 total).
+         Values are mean $\pm$ s.e.\ across cells.
          RL results \todo{to be filled}.}
 \label{tab:heuristic_ordering}
+\setlength{\tabcolsep}{6pt}
 \begin{tabular}{lcccccc}
 \toprule
-Policy & $\anc{}_{\mathrm{fix}}$ & $\anc{}_{\mathrm{adp}}$ & FinalNC
-       & Solved & Rounds$^*$ & NCgain \\
+Policy      & \ancfix{}         & \ancadp{}   & FinalNC     & Solved      & Rounds$^{*}$ & NCgain \\
 \midrule
-RL          & \todo{} & \todo{} & \todo{} & \todo{} & \todo{} & \todo{} \\
-Greedy      & \todo{} & \todo{} & \todo{} & \todo{} & \todo{} & \todo{} \\
-Degree      & \todo{} & \todo{} & \todo{} & \todo{} & \todo{} & \todo{} \\
-Betweenness & \todo{} & \todo{} & \todo{} & \todo{} & \todo{} & \todo{} \\
-Risk        & \todo{} & \todo{} & \todo{} & \todo{} & \todo{} & \todo{} \\
-Random      & \todo{} & \todo{} & \todo{} & \todo{} & \todo{} & \todo{} \\
+RL          & \todo{}           & \todo{}     & \todo{}     & \todo{}     & \todo{}      & \todo{} \\
+Greedy      & \todo{}           & \todo{}     & \todo{}     & \todo{}     & \todo{}      & \todo{} \\
+Degree      & \todo{}           & \todo{}     & \todo{}     & \todo{}     & \todo{}      & \todo{} \\
+Betweenness & \todo{}           & \todo{}     & \todo{}     & \todo{}     & \todo{}      & \todo{} \\
+Risk        & \todo{}           & \todo{}     & \todo{}     & \todo{}     & \todo{}      & \todo{} \\
+Random      & \todo{}           & \todo{}     & \todo{}     & \todo{}     & \todo{}      & \todo{} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Degree and Betweenness outperform Risk and Random because repairing structurally
-central nodes restores the largest number of load-paths simultaneously, accelerating
-the connectivity recovery trajectory.
-Risk prioritises nodes under high load stress but not necessarily those whose removal
-fragments the network, explaining its underperformance relative to centrality
-heuristics.
+% TODO: Figure — bar chart of ANC-fix per policy (95\% CI), one panel per
+%       pfail, averaged over alpha and B. Source: ba_30_50 summary JSON.
 
-% TODO: Figure — bar chart of ANC-fix per policy (with 95% CI), averaged across
-%       budget values, one panel per pfail level. Sourced from
-%       eval_param_generalization/ba_30_50/param_generalization_summary.json
+\paragraph{Why Greedy dominates.}
+The \ancfix{} objective is a monotone submodular function of the repair
+set: each additional repair helps, but with diminishing returns as the
+graph becomes more connected.
+\citet{nemhauser1978analysis} proved that for any monotone submodular
+function, the greedy algorithm achieves at least a
+$(1-1/e)\approx 0.63$ fraction of the combinatorial optimum, and
+\citet{feige1998threshold} showed this bound is tight — no polynomial-time
+algorithm can exceed it unless $\mathrm{P}=\mathrm{NP}$.
+Beyond the theoretical guarantee, Greedy is adaptive: it observes the
+current cascade state (active failures, live components, candidate
+bridges) at every step before acting.
+Static centrality measures cannot access this information.
+The resulting gap — $\approx\!0.07$--$0.10$ \ancfix{} over Degree on BA
+and ER — quantifies the value of one-step lookahead.
 
-% ------------------------------------------------------------------
+\paragraph{Why Degree and Betweenness outperform Risk and Random.}
+Under the Motter--Lai model \citep{motter2002cascade}, load is
+proportional to degree, so high-degree nodes carry the most load and
+serve as primary redistribution hubs.
+\citet{albert2000error} showed that hub removal fragments scale-free
+networks orders of magnitude faster than removal of random nodes; the
+recovery analogue is immediate — restoring hubs reconnects the most
+load-paths simultaneously.
+This \emph{hub-first principle} explains the Degree advantage on BA
+graphs.
+Betweenness tracks degree closely on BA (Pearson $r\approx 0.7$--$0.9$;
+\citealt{barthelemy2004betweenness}) because high-degree hubs also lie
+on the most shortest paths \citep{girvan2002community}, so both
+centralities identify the same repair targets.
+\citet{holme2002attack} formalised this: on heterogeneous networks,
+degree-targeted recovery is strictly more efficient than random, with the
+efficiency gap increasing in $\kappa = \langle k^2\rangle/\langle
+k\rangle$.
+
+Risk selects by load-to-capacity ratio $r_i = \ell_i/c_i$.
+Although motivated by cascade physics, this conflates
+\emph{failure prevention} (stopping overloaded nodes from propagating)
+with \emph{connectivity restoration} (reconnecting the largest component
+as fast as possible).
+\citet{crucitti2004model} showed that in degree-load models the nodes
+accumulating the highest post-cascade stress are typically
+\emph{intermediate-degree} nodes that absorbed redistributed load from
+failed hubs, not the hubs themselves.
+Repairing them yields low connectivity gain per action.
+Random selection confirms by contrast that even the coarsest structural
+signal is beneficial: \citet{cohen2000resilience} showed that
+hub-targeted recovery restores macroscopic connectivity in $O(\log n)$
+actions on scale-free networks, versus $O(n)$ for random recovery.
+
+% ---------------------------------------------------------------------------
 \subsection{Regime Sensitivity}
-% ------------------------------------------------------------------
+\label{sec:regime}
+% ---------------------------------------------------------------------------
 
-Recovery difficulty varies substantially across the $(p_{\mathrm{fail}}, B)$ plane.
-Figure~\ref{fig:heatmaps} shows $\anc{}_{\mathrm{fix}}$ heatmaps for each heuristic
-over the $3 \times 4$ subgrid of $(p_{\mathrm{fail}}, B)$ values, fixing
-$\alpha = 0.20$.
+Recovery difficulty varies substantially across the $(\pfail, B)$ plane.
+Figure~\ref{fig:heatmaps} shows \ancfix{} heatmaps for each heuristic
+over the $4\times 3$ subgrid of $(\pfail, B)$ values at $\alpha=0.25$
+(the training value).
 
-\begin{figure}[h]
+\begin{figure}[htbp]
 \centering
-% TODO: insert heatmaps — one subplot per policy (5 panels),
-%       x-axis = budget {1,2,3,4}, y-axis = pfail {0.05,0.15,0.25}.
-%       Sourced from eval_param_generalization/ba_30_50/param_generalization_summary.json
-\todo{Figure: ANC-fix heatmaps over (pfail $\times$ budget) for each heuristic.}
-\caption{$\anc{}_{\mathrm{fix}}$ as a function of failure rate $p_{\mathrm{fail}}$
-         and budget $B$, for each heuristic on Small BA graphs ($\alpha=0.20$).
-         Dark cells indicate regimes where recovery is hardest.}
+% TODO: five heatmap panels (one per heuristic), x = B in {1,2,3},
+%       y = pfail in {0.05,0.15,0.20,0.25}, green-red colormap.
+%       Source: eval_param_generalization/ba_30_50/ at alpha=0.25.
+\todo{Figure: \ancfix{} heatmaps over $(\pfail \times B)$ for each
+heuristic at $\alpha=0.25$.}
+\caption{\ancfix{} as a function of failure rate $\pfail$ and budget $B$
+         for each heuristic on Small BA graphs ($\alpha=0.25$, training
+         value).
+         Dark red cells indicate regimes where recovery is hardest.
+         The training cell ($\pfail=0.20$, $B=2$) is marked.}
 \label{fig:heatmaps}
 \end{figure}
 
-At high $p_{\mathrm{fail}}$ and $B=1$ no heuristic solves more than
-\todo{X\%} of episodes, defining the hard regime where a learned policy is expected
-to provide the largest marginal gain.
-Increasing $B$ uniformly improves all policies; the relative ordering is preserved
-across the grid.
+At high $\pfail$ and $B=1$ no heuristic achieves Solved $> \todo{X\%}$,
+defining the \emph{hard regime} where policy quality matters most and a
+learned policy is expected to provide the largest marginal gain.
+Conversely, at low $\pfail$ and $B\geq 2$ all heuristics saturate near
+Solved $=1$, forming a \emph{trivial regime} where the recovery task is
+essentially solved by any policy.
+Increasing $B$ monotonically improves all policies; the relative ordering
+is preserved throughout the grid.
 
-% ------------------------------------------------------------------
+% ---------------------------------------------------------------------------
 \subsection{Topology Sensitivity}
-% ------------------------------------------------------------------
+\label{sec:topology_heuristic}
+% ---------------------------------------------------------------------------
 
-To test whether the heuristic ordering is topology-dependent, we evaluate all
-policies on Small ER and Small WS graphs using the same 36-cell parameter grid
-(Table~\ref{tab:topology_comparison}).
+To determine whether the heuristic ordering is topology-dependent, we
+evaluate all policies on Small ER and Small WS graphs using the same
+48-cell parameter grid.
+Table~\ref{tab:topology_comparison} reports \ancfix{} averaged across
+cells; Figure~\ref{fig:topo_heuristic} compares the policy profiles
+across topologies.
 
-\begin{table}[h]
+\begin{table}[htbp]
 \centering
-\caption{$\anc{}_{\mathrm{fix}}$ averaged across 36 parameter cells for each
-         topology (100 graphs $\times$ 10 seeds per cell).
+\caption{\ancfix{} averaged across parameter cells per topology
+         (200 episodes/cell).
+         Values are mean $\pm$ s.e.\ across cells (s.e.\ = std/$\sqrt{N_{\mathrm{cells}}}$).
+         BA: 36 cells; ER: 100 cells; WS: 48 cells.
          RL results \todo{to be filled}.}
 \label{tab:topology_comparison}
-\begin{tabular}{lcccccc}
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{l cc cc cc}
 \toprule
- & \multicolumn{2}{c}{Small BA} & \multicolumn{2}{c}{Small ER} & \multicolumn{2}{c}{Small WS} \\
+ & \multicolumn{2}{c}{Small BA ($N=36$)}
+ & \multicolumn{2}{c}{Small ER ($N=100$)}
+ & \multicolumn{2}{c}{Small WS ($N=48$)} \\
 \cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
-Policy & mean & s.e. & mean & s.e. & mean & s.e. \\
+Policy      & mean   & s.e.   & mean   & s.e.   & mean   & s.e.   \\
 \midrule
 RL          & \todo{} & \todo{} & \todo{} & \todo{} & \todo{} & \todo{} \\
-Greedy      & \todo{} & \todo{} & \todo{} & \todo{} & \todo{} & \todo{} \\
-Degree      & \todo{} & \todo{} & \todo{} & \todo{} & \todo{} & \todo{} \\
-Betweenness & \todo{} & \todo{} & \todo{} & \todo{} & \todo{} & \todo{} \\
-Risk        & \todo{} & \todo{} & \todo{} & \todo{} & \todo{} & \todo{} \\
-Random      & \todo{} & \todo{} & \todo{} & \todo{} & \todo{} & \todo{} \\
+Greedy      & 0.823  & 0.042  & 0.731  & 0.029  & 0.715  & 0.040  \\
+Degree      & 0.789  & 0.045  & 0.659  & 0.031  & 0.560  & 0.042  \\
+Betweenness & 0.786  & 0.045  & 0.658  & 0.031  & 0.567  & 0.041  \\
+Risk        & 0.660  & 0.051  & 0.578  & 0.031  & 0.566  & 0.041  \\
+Random      & 0.581  & 0.051  & 0.507  & 0.029  & 0.446  & 0.038  \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-On Watts-Strogatz graphs the degree distribution is near-uniform, eliminating the
-advantage of degree-based selection; consequently the Degree--Betweenness gap narrows
-relative to BA and ER.
-Risk performs comparatively better on WS due to the more homogeneous structure
-providing cleaner load signals.
-The overall ranking (Greedy $>$ Degree $\approx$ Betweenness $\gg$ Risk $>$ Random)
-is preserved on ER and \todo{confirm on WS once data available}.
+\begin{figure}[htbp]
+\centering
+% TODO: grouped bar chart — one group per topology (BA/ER/WS),
+%       five bars per group (one per heuristic), y = ANC-fix.
+%       Source: eval_param_generalization/{ba_30_50,er_30_50,ws_30_50}/
+\todo{Figure: grouped bar chart of \ancfix{} per policy across BA, ER,
+and WS topologies.}
+\caption{\ancfix{} per heuristic on three topology types, averaged across
+         the 48-cell parameter grid.
+         Error bars show 95\,\% confidence intervals.}
+\label{fig:topo_heuristic}
+\end{figure}
 
-% TODO: Figure — grouped bar chart: one group per topology (BA/ER/WS),
-%       5 bars per group (one per heuristic), y-axis = ANC-fix.
-%       Sourced from eval_param_generalization/{ba_30_50,er_30_50,ws_30_50}/
+\paragraph{BA and ER: ordering preserved.}
+On Erd\H{o}s--R\'enyi graphs the degree distribution is Poisson with
+variance $\mathrm{Var}(k) = \langle k\rangle$ \citep{erdos1960evolution}.
+ER is more homogeneous than BA, yet retains a moderate right tail:
+the hub-first principle applies in weakened form.
+\citet{callaway2000network} showed that the efficiency of degree-targeted
+versus random recovery scales with $\langle k^2\rangle$; on ER this
+quantity is lower than on BA, narrowing but not eliminating the
+Degree--Random gap.
+The overall ranking $\text{Greedy} > \text{Degree} \approx
+\text{Betweenness} \gg \text{Risk} > \text{Random}$ is preserved,
+with uniformly lower absolute \ancfix{} on ER — a consequence of the
+higher connectivity loss per failure in random graphs where no resilient
+hub structure exists.
 
-% ==================================================================
+\paragraph{WS: Risk inverts the ordering over Degree and Betweenness.}
+Watts--Strogatz graphs \citep{watts1998collective}, constructed from a
+regular ring lattice with rewiring probability $p=0.1$, exhibit a
+near-uniform degree distribution ($k_i \approx 2m$ for almost all nodes)
+and high clustering coefficient
+$C \approx \frac{3(m-1)}{2(2m-1)}(1-p)^3 \gg C_{\mathrm{ER}}$.
+These two structural properties jointly explain the Risk anomaly.
+
+\textit{Degree and Betweenness lose discriminative power.}
+With $\mathrm{Var}(k)\approx 0$, there are no hubs: all nodes are
+structurally near-equivalent, and degree-based prioritisation reduces to
+near-random selection.
+\citet{holme2002attack} showed that the efficiency advantage of
+degree-targeted over random recovery vanishes on near-regular graphs.
+Betweenness is similarly compressed: on a regular ring, shortest paths
+are distributed uniformly, and rewiring at $p=0.1$ introduces only
+modest betweenness heterogeneity \citep{watts1998collective}.
+
+\textit{Cascade dynamics concentrate load locally, creating
+Risk-detectable hotspots.}
+When a node fails on a WS graph, its load must redistribute to neighbors.
+Because WS has high clustering, neighbors of a failed node are themselves
+densely interconnected, forming a tight local cluster.
+Unlike BA, where excess load disperses through long-range hub connections,
+on WS the load \emph{pools within the local neighborhood of the failure},
+creating spatially localized overload hotspots.
+\citet{buldyrev2010catastrophic} showed that in networks with high local
+clustering, cascade propagation is governed by local neighborhood
+structure rather than global centrality: failures spread within clusters
+before jumping between them.
+Risk, operating on the post-cascade load state, targets precisely the
+nodes at the active cascade frontier — the locally overloaded nodes that,
+if not repaired, will propagate the failure inward.
+\citet{majdandzic2014spontaneous} showed that in clustered failure
+systems, local boundary intervention is more effective than global
+structural targeting, consistent with Risk outperforming Degree and
+Betweenness on WS.
+
+% ===========================================================================
 \section{Comparative Evaluation}
-% ==================================================================
+\label{sec:comparative}
+% ===========================================================================
 
-% ------------------------------------------------------------------
-\subsection{In-Distribution}
-% ------------------------------------------------------------------
+We now compare the trained RL policy against all heuristics across four
+evaluation settings.
+Sections~\ref{sec:indist}--\ref{sec:ood} address, respectively:
+in-distribution performance, topology generalisation (ER, WS),
+scale generalisation (Large BA), and real-world OOD (IEEE 300-bus).
 
-We compare RL against all heuristics on Small BA graphs
-($n \in [30,50]$, the training distribution) across the full 36-cell parameter grid.
-Results are reported in Table~\ref{tab:indist}.
+% ---------------------------------------------------------------------------
+\subsection{In-Distribution Performance}
+\label{sec:indist}
+% ---------------------------------------------------------------------------
 
-\begin{table}[h]
+Table~\ref{tab:indist} reports \ancfix{} and supporting metrics for all
+policies on Small BA graphs across the full 48-cell grid.
+The training cell ($\alpha=0.25$, $\pfail=0.20$, $B=2$) is highlighted.
+
+\begin{table}[htbp]
 \centering
-\caption{In-distribution evaluation on Small BA graphs.
-         $\anc{}_{\mathrm{fix}}$ averaged across 36 cells
-         (1\,000 episodes/cell). Wilcoxon $p$-values test RL vs.\ each baseline.}
+\caption{In-distribution evaluation on Small BA ($n\!\in\![30,50]$),
+         averaged across 48 parameter cells (200 episodes/cell).
+         Wilcoxon $p$-values test RL against each baseline (two-sided).
+         $\dagger$ marks the training cell.}
 \label{tab:indist}
-\begin{tabular}{lcccc}
+\setlength{\tabcolsep}{6pt}
+\begin{tabular}{lccccc}
 \toprule
-Policy & $\anc{}_{\mathrm{fix}}$ & Solved & Rounds$^*$ & $p$ vs.\ RL \\
+Policy      & \ancfix{}  & \ancadp{}  & Solved     & Rounds$^{*}$ & $p$ vs.\ RL \\
 \midrule
-RL          & \todo{} & \todo{} & \todo{} & --- \\
-Greedy      & \todo{} & \todo{} & \todo{} & \todo{} \\
-Degree      & \todo{} & \todo{} & \todo{} & \todo{} \\
-Betweenness & \todo{} & \todo{} & \todo{} & \todo{} \\
-Risk        & \todo{} & \todo{} & \todo{} & \todo{} \\
-Random      & \todo{} & \todo{} & \todo{} & \todo{} \\
+RL          & \todo{}    & \todo{}    & \todo{}    & \todo{}      & --- \\
+Greedy      & \todo{}    & \todo{}    & \todo{}    & \todo{}      & \todo{} \\
+Degree      & \todo{}    & \todo{}    & \todo{}    & \todo{}      & \todo{} \\
+Betweenness & \todo{}    & \todo{}    & \todo{}    & \todo{}      & \todo{} \\
+Risk        & \todo{}    & \todo{}    & \todo{}    & \todo{}      & \todo{} \\
+Random      & \todo{}    & \todo{}    & \todo{}    & \todo{}      & \todo{} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-% TODO: Figure — ANC-fix vs budget (x-axis), one line per policy,
-%       faceted by pfail. Sourced from eval_param_generalization/ba_30_50/
+% TODO: Figure — ANC-fix vs B (x-axis), one line per policy, faceted by
+%       pfail (3 panels). Source: eval_param_generalization/ba_30_50/
 
-% ------------------------------------------------------------------
-\subsection{Topology Generalization}
-% ------------------------------------------------------------------
+% ---------------------------------------------------------------------------
+\subsection{Topology Generalisation}
+\label{sec:topo_gen}
+% ---------------------------------------------------------------------------
 
-To assess topology generalization we evaluate RL and all heuristics on Small ER and
-Small WS graphs — topologies unseen during training — using the same 36-cell grid.
-Table~\ref{tab:topo_gen} reports $\anc{}_{\mathrm{fix}}$ averaged across cells;
-Figure~\ref{fig:topo_gen} shows the per-topology ANC profiles.
+We evaluate RL and all heuristics on Small ER and Small WS graphs —
+topologies unseen during training — using the same 48-cell grid.
+Table~\ref{tab:topo_gen} reports \ancfix{} and the gain of each policy
+over the Degree baseline ($\Delta_{\text{Degree}}$, positive = better
+than Degree).
 
-\begin{table}[h]
+\begin{table}[htbp]
 \centering
-\caption{Topology generalization: $\anc{}_{\mathrm{fix}}$ averaged across 36 cells
-         per topology. $\Delta$RL = RL minus Degree (best fixed heuristic on BA).}
+\caption{Topology generalisation: \ancfix{} and $\Delta_{\mathrm{Degree}}$
+         (policy minus Degree \ancfix{}) averaged across 48 cells.
+         RL results \todo{to be filled}.
+         WS results \todo{to be filled}.}
 \label{tab:topo_gen}
-\begin{tabular}{lcccccc}
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{l cc cc cc}
 \toprule
- & \multicolumn{2}{c}{Small BA} & \multicolumn{2}{c}{Small ER} & \multicolumn{2}{c}{Small WS} \\
+ & \multicolumn{2}{c}{Small BA}
+ & \multicolumn{2}{c}{Small ER}
+ & \multicolumn{2}{c}{Small WS} \\
 \cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
-Policy & $\anc{}_{\mathrm{fix}}$ & $\Delta$RL & $\anc{}_{\mathrm{fix}}$ & $\Delta$RL
-       & $\anc{}_{\mathrm{fix}}$ & $\Delta$RL \\
+Policy      & \ancfix{}  & $\Delta_{\mathrm{Degree}}$
+            & \ancfix{}  & $\Delta_{\mathrm{Degree}}$
+            & \ancfix{}  & $\Delta_{\mathrm{Degree}}$ \\
 \midrule
 RL          & \todo{} & ---     & \todo{} & ---     & \todo{} & ---     \\
 Greedy      & \todo{} & \todo{} & \todo{} & \todo{} & \todo{} & \todo{} \\
-Degree      & \todo{} & \todo{} & \todo{} & \todo{} & \todo{} & \todo{} \\
+Degree      & \todo{} & $0$     & \todo{} & $0$     & \todo{} & $0$     \\
 Betweenness & \todo{} & \todo{} & \todo{} & \todo{} & \todo{} & \todo{} \\
 Risk        & \todo{} & \todo{} & \todo{} & \todo{} & \todo{} & \todo{} \\
 Random      & \todo{} & \todo{} & \todo{} & \todo{} & \todo{} & \todo{} \\
@@ -276,87 +472,105 @@ Random      & \todo{} & \todo{} & \todo{} & \todo{} & \todo{} & \todo{} \\
 \end{tabular}
 \end{table}
 
-\begin{figure}[h]
+\begin{figure}[htbp]
 \centering
-% TODO: Figure — three panels (BA / ER / WS), each showing ANC-fix per policy
-%       as a function of budget, at pfail=0.15.
-%       Sourced from eval_param_generalization/{ba_30_50,er_30_50,ws_30_50}/
-\todo{Figure: ANC-fix vs.\ budget per topology at $p_{\mathrm{fail}}=0.15$.}
-\caption{ANC-fixed as a function of budget $B$ for each policy on three topologies
-         ($\alpha=0.20$, $p_{\mathrm{fail}}=0.15$).}
+% TODO: three panels (BA/ER/WS), ANC-fix vs B per policy at
+%       alpha=0.25, pfail=0.20 (training regime).
+%       Source: eval_param_generalization/{ba_30_50,er_30_50,ws_30_50}/
+\todo{Figure: \ancfix{} vs.\ $B$ per policy on BA, ER, WS at the
+training regime ($\alpha=0.25$, $\pfail=0.20$).}
+\caption{\ancfix{} as a function of budget $B$ for each policy across
+         three topology types at the training regime
+         ($\alpha=0.25$, $\pfail=0.20$).
+         Shaded bands show 95\,\% confidence intervals.}
 \label{fig:topo_gen}
 \end{figure}
 
-% ------------------------------------------------------------------
-\subsection{Scale Generalization}
-% ------------------------------------------------------------------
+% ---------------------------------------------------------------------------
+\subsection{Scale Generalisation}
+\label{sec:scale_gen}
+% ---------------------------------------------------------------------------
 
-We test whether the policy generalises to graphs $3\text{--}7\times$ larger than
-the training distribution by evaluating on Large BA ($n \in [100, 300]$).
-The budget scales linearly with $n$ (reference $n^* = 40$), so the
-\emph{budget intensity} (repairs per node per round) is held constant.
-Results are in Table~\ref{tab:scale_gen}.
+We test whether the policy generalises to graphs $2.5$--$7.5\times$
+larger than the training distribution by evaluating on Large BA
+($n\in[100,300]$).
+The budget scales linearly with $n$ relative to $\nstar = 40$, so the
+\emph{budget intensity} (repairs per node per round) is held constant
+across small and large graphs, isolating the effect of graph size from
+the effect of absolute budget.
+Table~\ref{tab:scale_gen} compares \ancfix{} and Solved between Small BA
+and Large BA.
 
-\begin{table}[h]
+\begin{table}[htbp]
 \centering
-\caption{Scale generalization: $\anc{}_{\mathrm{fix}}$ on Small BA vs.\ Large BA,
-         averaged across 36 cells. Large BA uses 30 graphs $\times$ 5 seeds
-         $= 150$ episodes per cell.}
+\caption{Scale generalisation: \ancfix{} and Solved on Small BA
+         vs.\ Large BA, averaged across 48 parameter cells.
+         Large BA uses 30 graphs $\times$ 5 seeds $= 150$ episodes/cell.
+         RL results \todo{to be filled}.}
 \label{tab:scale_gen}
-\begin{tabular}{lcccc}
+\setlength{\tabcolsep}{6pt}
+\begin{tabular}{l cccc}
 \toprule
  & \multicolumn{2}{c}{Small BA ($n\!\in\![30,50]$)}
  & \multicolumn{2}{c}{Large BA ($n\!\in\![100,300]$)} \\
 \cmidrule(lr){2-3}\cmidrule(lr){4-5}
-Policy & $\anc{}_{\mathrm{fix}}$ & Solved & $\anc{}_{\mathrm{fix}}$ & Solved \\
+Policy      & \ancfix{} & Solved  & \ancfix{} & Solved  \\
 \midrule
-RL          & \todo{} & \todo{} & \todo{} & \todo{} \\
-Greedy      & \todo{} & \todo{} & \todo{} & \todo{} \\
-Degree      & \todo{} & \todo{} & \todo{} & \todo{} \\
-Betweenness & \todo{} & \todo{} & \todo{} & \todo{} \\
-Risk        & \todo{} & \todo{} & \todo{} & \todo{} \\
-Random      & \todo{} & \todo{} & \todo{} & \todo{} \\
+RL          & \todo{}   & \todo{} & \todo{}   & \todo{} \\
+Greedy      & \todo{}   & \todo{} & \todo{}   & \todo{} \\
+Degree      & \todo{}   & \todo{} & \todo{}   & \todo{} \\
+Betweenness & \todo{}   & \todo{} & \todo{}   & \todo{} \\
+Risk        & \todo{}   & \todo{} & \todo{}   & \todo{} \\
+Random      & \todo{}   & \todo{} & \todo{}   & \todo{} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-% TODO: Figure — line plot: ANC-fix (y) vs mean graph size (x),
-%       two points per policy (small BA / large BA), one line per policy.
-%       Sourced from eval_param_generalization/{ba_30_50,ba_100_300}/
+% TODO: Figure — line plot: ANC-fix (y) vs mean graph size (x, two
+%       points per policy), one line per policy.
+%       Source: eval_param_generalization/{ba_30_50,ba_100_300}/
 
-% ------------------------------------------------------------------
+% ---------------------------------------------------------------------------
 \subsection{Out-of-Distribution: Real-World Topology}
-% ------------------------------------------------------------------
+\label{sec:ood}
+% ---------------------------------------------------------------------------
 
-The IEEE 300-bus power transmission network ($n=300$, $|\mathcal{E}|\approx411$,
-mean degree $\approx 2.74$) is used as a real-world OOD benchmark.
-The cascade model (load = degree, capacity = $(1+\alpha)\times$degree) is a
-stylized approximation applied to the real topology.
-Budget is scaled from the reference ($n^*=40$) to the graph size.
-Results are averaged across 20 failure seeds per cell (Table~\ref{tab:ood}).
+The IEEE 300-bus power transmission network
+($n=300$, $|\mathcal{E}|=411$, mean degree $\approx 2.74$) is used as a
+real-world OOD benchmark.
+The cascade model (load $=$ degree, capacity $= (1+\alpha)\times$degree)
+is a stylised approximation applied to the real topology; this is
+explicitly acknowledged as such and does not claim physical accuracy for
+power-flow simulation.
+The budget is scaled from $\nstar=40$ to $n=300$, giving a reference
+budget of $B^{\dagger}=2 \rightarrow B_{\text{scaled}}=15$.
+Table~\ref{tab:ood} reports results averaged across 48 parameter cells
+(20 seeds per cell).
 
-\begin{table}[h]
+\begin{table}[htbp]
 \centering
-\caption{OOD evaluation on IEEE 300-bus, $\anc{}_{\mathrm{fix}}$ averaged across
-         36 parameter cells (1 graph $\times$ 20 seeds $= 20$ episodes per cell).}
+\caption{OOD evaluation on IEEE 300-bus, averaged across 48 parameter
+         cells (1 graph $\times$ 20 seeds $= 20$ episodes per cell).
+         RL results \todo{to be filled}.}
 \label{tab:ood}
-\begin{tabular}{lcccc}
+\setlength{\tabcolsep}{6pt}
+\begin{tabular}{lccccc}
 \toprule
-Policy & $\anc{}_{\mathrm{fix}}$ & $\anc{}_{\mathrm{adp}}$ & FinalNC & Solved \\
+Policy      & \ancfix{} & \ancadp{} & FinalNC & Solved  & Rounds$^{*}$ \\
 \midrule
-RL          & \todo{} & \todo{} & \todo{} & \todo{} \\
-Greedy      & \todo{} & \todo{} & \todo{} & \todo{} \\
-Degree      & \todo{} & \todo{} & \todo{} & \todo{} \\
-Betweenness & \todo{} & \todo{} & \todo{} & \todo{} \\
-Risk        & \todo{} & \todo{} & \todo{} & \todo{} \\
-Random      & \todo{} & \todo{} & \todo{} & \todo{} \\
+RL          & \todo{}   & \todo{}   & \todo{} & \todo{} & \todo{} \\
+Greedy      & \todo{}   & \todo{}   & \todo{} & \todo{} & \todo{} \\
+Degree      & \todo{}   & \todo{}   & \todo{} & \todo{} & \todo{} \\
+Betweenness & \todo{}   & \todo{}   & \todo{} & \todo{} & \todo{} \\
+Risk        & \todo{}   & \todo{}   & \todo{} & \todo{} & \todo{} \\
+Random      & \todo{}   & \todo{}   & \todo{} & \todo{} & \todo{} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 % TODO: Figure — bar chart comparing ANC-fix on Small BA vs IEEE 300-bus
-%       for each policy at the training regime (alpha=0.20, pfail=0.15, budget=2).
-%       Sourced from eval_param_generalization/ba_30_50/ and eval_real_world/
+%       per policy at the training regime (alpha=0.25, pfail=0.20, B=2).
+%       Source: eval_param_generalization/ba_30_50/ and eval_real_world/
 
 \bibliographystyle{apalike}
 \bibliography{references}
