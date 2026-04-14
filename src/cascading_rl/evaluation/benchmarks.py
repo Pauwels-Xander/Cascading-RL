@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 
-import itertools
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from math import sqrt
@@ -203,11 +202,6 @@ def compare_policy_pair(
             f"Got {len(episodes_a)} for '{name_a}' and {len(episodes_b)} for '{name_b}'."
         )
     n = len(episodes_a)
-    if n == 0:
-        raise ValueError(
-            f"Episode lists for '{name_a}' and '{name_b}' must not be empty "
-            "for paired comparison."
-        )
     values_a = [_extract_metric(r, metric) for r in episodes_a]
     values_b = [_extract_metric(r, metric) for r in episodes_b]
     differences = [a - b for a, b in zip(values_a, values_b)]
@@ -306,7 +300,6 @@ def collect_matched_episodes(
     scale_budget: bool = False,
     scale_max_rounds: bool = False,
     reference_n: int = 40,
-    collect_step_metrics: bool = False,
 ) -> dict[str, list["EpisodeResult"]]:
     """Evaluate policy factories across fixed graphs and return per-episode results.
 
@@ -356,7 +349,7 @@ def collect_matched_episodes(
                     **env_kw,
                 )
                 policy = policy_factory(graph_index, seed)
-                result = rollout_policy(env, policy, seed=seed, collect_step_metrics=collect_step_metrics)
+                result = rollout_policy(env, policy, seed=seed)
                 episode_results_by_policy[policy_name].append(result)
 
     return episode_results_by_policy
@@ -370,7 +363,6 @@ class PolicyEvaluationSummary:
     rounds: AggregateMetric
     solved_fraction: AggregateMetric
     rounds_when_solved: AggregateMetric | None
-    rounds_when_failed: AggregateMetric | None
     fully_restored_count: int
     episode_count: int
     unsolved_low_final_nc_count: int = 0
@@ -425,45 +417,22 @@ def _compute_step_metrics(
     base_state = observation_to_cascade_state(observation)
     nc_gain = delta_nc_after_round_batch(base_state, chosen_nodes)
 
+    # Rank each valid action individually (O(|failed|) instead of O(|failed|^B))
     valid = list(observation.valid_actions)
-    if len(chosen_nodes) == 1:
-        # Rank each valid singleton action.
-        singleton_deltas: list[tuple[float, object]] = []
-        for node in valid:
-            delta = delta_nc_after_round_batch(base_state, [node])
-            singleton_deltas.append((delta, node))
-        singleton_deltas.sort(key=lambda x: (-x[0], str(x[1])))
+    singleton_deltas: list[tuple[float, object]] = []
+    for node in valid:
+        delta = delta_nc_after_round_batch(base_state, [node])
+        singleton_deltas.append((delta, node))
+    singleton_deltas.sort(key=lambda x: (-x[0], str(x[1])))
 
-        greedy_nc_gain = singleton_deltas[0][0] if singleton_deltas else nc_gain
+    greedy_nc_gain = singleton_deltas[0][0] if singleton_deltas else nc_gain
 
-        # Rank of chosen node among all singletons (1 = best)
-        action_rank = 1
-        for rank, (_, node) in enumerate(singleton_deltas, start=1):
-            if node == chosen:
-                action_rank = rank
-                break
-    else:
-        batch_size = len(chosen_nodes)
-        chosen_key = tuple(str(node) for node in sorted(chosen_nodes, key=str))
-        batch_deltas: list[tuple[float, tuple[object, ...], tuple[str, ...]]] = []
-        for candidate_batch in itertools.combinations(valid, batch_size):
-            normalized_batch = tuple(sorted(candidate_batch, key=str))
-            delta = delta_nc_after_round_batch(base_state, normalized_batch)
-            batch_deltas.append(
-                (
-                    delta,
-                    normalized_batch,
-                    tuple(str(node) for node in normalized_batch),
-                )
-            )
-        batch_deltas.sort(key=lambda x: (-x[0], x[2]))
-
-        greedy_nc_gain = batch_deltas[0][0] if batch_deltas else nc_gain
-        action_rank = 1
-        for rank, (_, _batch, batch_key) in enumerate(batch_deltas, start=1):
-            if batch_key == chosen_key:
-                action_rank = rank
-                break
+    # Rank of chosen node among all singletons (1 = best)
+    action_rank = 1
+    for rank, (_, node) in enumerate(singleton_deltas, start=1):
+        if node == chosen:
+            action_rank = rank
+            break
 
     return StepMetrics(
         round=current_round,
@@ -493,11 +462,6 @@ def summarize_episode_results(
         float(result.rounds)
         for result in episode_results
         if result.remaining_failed_nodes == 0
-    ]
-    failed_rounds = [
-        float(result.rounds)
-        for result in episode_results
-        if result.remaining_failed_nodes > 0
     ]
     fully_restored_count = sum(
         1 for result in episode_results if result.remaining_failed_nodes == 0
@@ -551,7 +515,6 @@ def summarize_episode_results(
             [1.0 if result.remaining_failed_nodes == 0 else 0.0 for result in episode_results]
         ),
         rounds_when_solved=_aggregate(solved_rounds) if solved_rounds else None,
-        rounds_when_failed=_aggregate(failed_rounds) if failed_rounds else None,
         fully_restored_count=fully_restored_count,
         episode_count=episode_count,
         unsolved_low_final_nc_count=unsolved_low,
@@ -576,18 +539,8 @@ def rollout_policy(
     env: RecoveryEnv,
     policy: Policy,
     seed: int | None = None,
-    *,
-    collect_step_metrics: bool = False,
 ) -> EpisodeResult:
-    """Run one episode under a policy and collect core comparison metrics.
-
-    ``collect_step_metrics=False`` (the default) skips the per-step greedy
-    lookahead that computes ``StepMetrics``.  That lookahead re-evaluates every
-    valid action at every step (O(|failed|) cascade simulations per step) and
-    dominates runtime during training-time validation.  Pass
-    ``collect_step_metrics=True`` only for offline diagnostic analysis where
-    ``mean_greedy_nc_gain`` / ``mean_action_rank`` are actually needed.
-    """
+    """Run one episode under a policy and collect core comparison metrics."""
     observation = env.reset(seed=seed)
     total_reward = 0.0
     steps = 0
@@ -617,10 +570,9 @@ def rollout_policy(
 
     while not done:
         action = policy(observation)
-        if collect_step_metrics:
-            step_metrics_list.append(
-                _compute_step_metrics(observation, action, env.current_round)
-            )
+        step_metrics_list.append(
+            _compute_step_metrics(observation, action, env.current_round)
+        )
         if isinstance(action, (list, tuple)):
             observation, reward, done, info = env.step_batch(list(action))
         else:
@@ -635,7 +587,7 @@ def rollout_policy(
     if rounds > len(nc_by_round):
         nc_by_round.append(final_nc)
     mean_delta_nc_per_round = (final_nc - initial_nc) / rounds if rounds > 0 else 0.0
-    max_rounds_for_anc = env.max_rounds if env.max_rounds is not None else (rounds or len(nc_by_round) or 1)
+    max_rounds_for_anc = env.max_rounds
 
     return EpisodeResult(
         total_reward=total_reward,

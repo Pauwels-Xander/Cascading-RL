@@ -21,12 +21,6 @@ from cascading_rl.evaluation.benchmarks import (
     rollout_policy,
     summarize_episode_results,
 )
-from cascading_rl.evaluation.metrics import (
-    AggregateMetrics,
-    EpisodeMetrics,
-    compute_aggregate_metrics,
-    compute_episode_metrics,
-)
 from cascading_rl.evaluation.regime import build_policy_factories, compute_regime_diagnostics
 
 EVAL_SPREAD_FILTER_DEGREE_RANDOM = 0.15
@@ -102,7 +96,6 @@ def regime_label_from_heuristic_rollouts(
 ) -> str:
     factories = build_policy_factories(base_seed=base_seed)
     summaries: dict[str, Any] = {}
-    final_nc_threshold = final_nc_failure_threshold_for_reporting(env_kwargs)
     for name in DIAGNOSTIC_POLICY_NAMES:
         policy = factories[name](graph_index, failure_seed)
         env = RecoveryEnv(
@@ -117,7 +110,7 @@ def regime_label_from_heuristic_rollouts(
         result = rollout_policy(env, policy, seed=failure_seed)
         summaries[name] = summarize_episode_results(
             [result],
-            final_nc_failure_threshold=final_nc_threshold,
+            final_nc_failure_threshold=thr,
         )
     diagnostics = compute_regime_diagnostics(
         summaries,
@@ -167,13 +160,7 @@ def _instance_from_decoded(item: Mapping[str, Any]) -> dict[str, Any]:
                 "Each instance dict must encode 'graph' as networkx node_link_data "
                 "(requires 'edges' or 'links')."
             )
-        # Key for the edge list: historically "links" in node-link JSON; nx.node_link_data uses "edges".
-        edges_key = "links" if "links" in graph_raw else "edges"
-        # NetworkX 3.x renamed kwarg ``link`` -> ``edges`` for node_link_graph.
-        try:
-            out["graph"] = json_graph.node_link_graph(graph_raw, edges=edges_key)
-        except TypeError:
-            out["graph"] = json_graph.node_link_graph(graph_raw, link=edges_key)
+        out["graph"] = json_graph.node_link_graph(graph_raw)
     elif isinstance(graph_raw, nx.Graph):
         pass
     elif graph_raw is not None:
@@ -251,12 +238,9 @@ def evaluate_policies_on_saved_instances(
 ) -> tuple[
     dict[str, PolicyEvaluationSummary],
     dict[str, dict[str, PolicyEvaluationSummary]],
-    dict[str, AggregateMetrics],
 ]:
-    """Aggregate rollouts over all instances; second return groups by instance regime_label,
-    third return provides AggregateMetrics per policy."""
+    """Aggregate rollouts over all instances; second return groups by instance regime_label."""
     by_policy: dict[str, list[EpisodeResult]] = {name: [] for name in policy_names}
-    by_episode_metrics: dict[str, list[EpisodeMetrics]] = {name: [] for name in policy_names}
     by_regime: dict[str, dict[str, list[EpisodeResult]]] = defaultdict(
         lambda: defaultdict(list)
     )
@@ -269,8 +253,6 @@ def evaluate_policies_on_saved_instances(
             result = rollout_policy(env, policy, seed=seed_i)
             by_policy[name].append(result)
             by_regime[label][name].append(result)
-            em = compute_episode_metrics(result.nc_by_round, result.remaining_failed_nodes == 0)
-            by_episode_metrics[name].append(em)
     thr = final_nc_failure_threshold_for_reporting(env_kwargs)
     overall = {
         n: summarize_episode_results(rs, final_nc_failure_threshold=thr)
@@ -285,12 +267,7 @@ def evaluate_policies_on_saved_instances(
         }
         for lbl, pmap in by_regime.items()
     }
-    agg_metrics = {
-        n: compute_aggregate_metrics(ems)
-        for n, ems in by_episode_metrics.items()
-        if ems
-    }
-    return overall, per_bucket, agg_metrics
+    return overall, per_bucket
 
 
 def mean_final_nc_from_summaries(

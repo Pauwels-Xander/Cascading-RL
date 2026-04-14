@@ -10,15 +10,15 @@ from typing import Any
 import sys
 import warnings
 
-import torch  # type: ignore[import-untyped]
-from torch.nn import functional as F  # type: ignore[import-untyped]
-from torch.optim import Adam  # type: ignore[import-untyped]
+import torch
+from torch.nn import functional as F
+from torch.optim import Adam
 
 from cascading_rl.budgeting import compute_scaled_budget, compute_scaled_max_rounds
 from cascading_rl.envs.recovery import RecoveryEnv, RecoveryObservation
 from cascading_rl.evaluation import evaluate_policy_factories_on_graphs
 from cascading_rl.evaluation.metrics import compute_episode_metrics
-from cascading_rl.graph.generation import make_ba_graph, make_graph_batch
+from cascading_rl.graph.generation import make_ba_graph, make_er_graph, make_ws_graph, make_graph_batch
 from cascading_rl.models import (
     FEATURE_NAMES,
     GLOBAL_FEATURE_NAMES,
@@ -34,12 +34,11 @@ from cascading_rl.training.replay import ReplayBuffer, Transition
 
 Node = Hashable
 
-GRAPH_BUFFER_MAXLEN = 50
+GRAPH_BUFFER_MAXLEN = 20
 # Large offset ensures graph-generation seeds are statistically independent from
 # episode/failure seeds (which start near 0), avoiding accidental seed collisions.
 FREEZE_GRAPH_SPECS_SEED_OFFSET = 20_000
-# Rolling window for progress-line recovery rate and mean ANC (same construction as
-# ``compute_episode_metrics`` / ``evaluate_policy.py`` aggregate ``mean_anc_unconditional``).
+# Rolling window for progress-line recovery rate and mean ANC.
 ROLLING_TRAIN_METRICS_EPISODES = 200
 
 
@@ -51,7 +50,7 @@ class TrainingConfig:
     pfail: float = 0.2
     alpha_values: tuple[float, ...] = (0.25,)
     pfail_values: tuple[float, ...] = (0.2,)
-    budget: int = 2
+    budget: int = 3
     scale_budget: bool = True
     budget_reference_n: int = 40
     max_rounds: int = 20
@@ -61,23 +60,25 @@ class TrainingConfig:
     action_space: str = "failed"
     obs_hops: int | None = None
     abandonment_nc_threshold: float | None = None
-    n_range: tuple[int, int] = (30, 50)
+    homogenize_reward: bool = True
+    n_range: tuple[int, int] = (40, 80)
     m: int = 2
-    num_episodes: int = 15000
-    replay_capacity: int = 10000
-    warmup_transitions: int = 500
-    batch_size: int = 64
+    graph_type: str = "ba"
+    num_episodes: int = 20000
+    replay_capacity: int = 20000
+    warmup_transitions: int = 1000
+    batch_size: int = 128
     gamma: float = 0.99
     use_monte_carlo_returns: bool = False
-    learning_rate: float = 3e-4
+    learning_rate: float = 2e-4
     epsilon_start: float = 1.0
     epsilon_end: float = 0.05
-    epsilon_decay_episodes: int = 10000
+    epsilon_decay_episodes: int = 18000
     target_update_interval: int = 200
     hidden_dim: int = 128
     embed_dim: int = 128
     num_layers: int = 2
-    use_global_features: bool = True
+    use_global_features: bool = False
     active_node_features: tuple[str, ...] = FEATURE_NAMES
     active_global_features: tuple[str, ...] = GLOBAL_FEATURE_NAMES
     use_virtual_node: bool = False
@@ -85,10 +86,10 @@ class TrainingConfig:
     imitation_graphs: int = 500
     imitation_seeds: int = 5
     imitation_epochs: int = 10
-    validation_graphs: int = 30
-    validation_seeds: tuple[int, ...] = (0, 1, 2, 3, 4, 5, 6)
+    validation_graphs: int = 2
+    validation_seeds: tuple[int, ...] = (0, 1, 2)
     validation_seed: int = 42
-    validation_every: int = 1000
+    validation_every: int = 200
     validation_tau: float = 0.8
     checkpoint_dir: str = "experiments/learner"
     checkpoint_name: str = "recovery_q.pt"
@@ -97,7 +98,12 @@ class TrainingConfig:
     # Diagnostics: log PR(degree)-PR(random) per episode; optional JSON/YAML eval set path.
     log_episode_spread: bool = False
     log_grad_norm: bool = False
-    validation_eval_set_path: str | None = "eval_sets/validation_set.json"
+    # Fixed eval set for stable, comparable validation curves across runs.
+    # Regenerate with: python scripts/generate_eval_set.py
+    validation_eval_set_path: str | None = "eval_sets/ds_validation.pkl"
+    # Return estimation: False = n-step round returns (default), True = full MC returns.
+    use_monte_carlo_returns: bool = False
+    debug: bool = False
 
 
 @dataclass
@@ -202,16 +208,10 @@ def _global_features_for_model(
 ) -> torch.Tensor | None:
     if not model.config.use_global_features:
         return None
-    global_features = observation_to_global_features(
+    return observation_to_global_features(
         observation,
         global_feature_names=model.global_feature_names,
     ).to(device)
-    if global_features.numel() == 0:
-        raise ValueError(
-            "use_global_features=True but the global feature vector is empty. "
-            f"global_feature_names={model.global_feature_names!r}"
-        )
-    return global_features
 
 
 def _choose_degree_batch(observation: RecoveryObservation) -> tuple[Node, ...]:
@@ -229,32 +229,16 @@ def _reset_with_non_empty_failures(
     rng: Random,
     *,
     max_attempts: int = 1024,
-    require_failed_gt_budget: bool = False,
 ) -> RecoveryObservation:
-    """Reset until the episode has at least one failed node.
-
-    When ``require_failed_gt_budget`` is True (RL / imitation training), also require
-    ``len(failed) > budget`` so the first round cannot clear all failures in one batch.
-    """
     seed = base_seed
     for _ in range(max_attempts):
         observation = env.reset(seed=seed)
-        if not observation.failed:
-            seed = rng.randint(0, 10**9)
-            continue
-        if require_failed_gt_budget and len(observation.failed) <= observation.budget:
-            seed = rng.randint(0, 10**9)
-            continue
-        return observation
-    extra = (
-        f" No state with len(failed) > budget (budget={env.budget}) was sampled within "
-        f"{max_attempts} attempts."
-        if require_failed_gt_budget
-        else ""
-    )
+        if observation.failed:
+            return observation
+        seed = rng.randint(0, 10**9)
     raise RuntimeError(
         f"After {max_attempts} reset attempts, no episode started with failed nodes "
-        f"(pfail={env.pfail}, n_nodes={env.base_graph.number_of_nodes()}).{extra} "
+        f"(pfail={env.pfail}, n_nodes={env.base_graph.number_of_nodes()}). "
         "Training requires stochastic failures or a positive pfail."
     )
 
@@ -321,12 +305,11 @@ def compute_dqn_loss(
     gamma: float,
     device: torch.device,
 ) -> torch.Tensor:
-    """Single-action DQN loss with support for round-collapsed bootstrapping.
-
-    Each transition stores one node action. Non-terminal targets bootstrap from
-    the best valid next action using ``gamma ** bootstrap_steps``, which lets
-    rewritten round transitions learn directly from the post-cascade state.
-    """
+    # Guard: budget_coverage is the only node feature that distinguishes
+    # intra-round states (b < B, reward=0, no cascade) from last-step states
+    # (b = B, cascade-inclusive reward). Without it the Q-network receives
+    # conflicting Bellman targets for observationally identical inputs, and
+    # the loss converges to a biased mixture of the two reward regimes.
     if "budget_coverage" not in model.feature_names:
         raise ValueError(
             "budget_coverage must be present in active node features when "
@@ -334,7 +317,7 @@ def compute_dqn_loss(
             "only input that lets the Q-network distinguish intra-round steps "
             "(reward=0) from last-round steps (cascade-inclusive reward). "
             "Remove it only from step_batch training where remaining_budget "
-            "is constant within each call."
+            "is constant within each call. See docs/architecture.md §0."
         )
     losses: list[torch.Tensor] = []
     for transition in transitions:
@@ -342,7 +325,6 @@ def compute_dqn_loss(
         global_features = _global_features_for_model(model, transition.observation, device=device)
         q_values = model(graph_tensor, global_features)
 
-        # Single action — take the Q-value for that node directly.
         action_index = graph_tensor.node_to_index[_normalize_action_batch(transition.action)[0]]
         q_selected = q_values[action_index]
 
@@ -360,7 +342,6 @@ def compute_dqn_loss(
                     next_tensor.node_to_index[node] for node in transition.next_observation.valid_actions
                 ]
                 if valid_next_indices:
-                    # Standard max-Q bootstrap.
                     valid_next_q = next_q_values[valid_next_indices]
                     bootstrap_discount = gamma ** transition.bootstrap_steps
                     target_value = target_value + bootstrap_discount * valid_next_q.max()
@@ -420,19 +401,16 @@ def rewrite_round(
         return []
     done = transitions[-1].done
     n = len(transitions)
-    # Build suffix sums right-to-left.
-    # suffix[i] accumulates r_i + γ·r_{i+1} + ... + γ^{n-1-i}·r_cascade
     suffix_rewards: list[float] = [0.0] * n
-    suffix_rewards[-1] = transitions[-1].reward  # r_cascade with γ^0
+    suffix_rewards[-1] = transitions[-1].reward
     for i in range(n - 2, -1, -1):
-        # γ^1 applied per step away from the cascade
         suffix_rewards[i] = transitions[i].reward + gamma * suffix_rewards[i + 1]
     return [
         Transition(
             observation=t.observation,
             action=t.action,
-            reward=suffix_rewards[i],       # suffix-discounted reward from step i to cascade
-            next_observation=s_post_cascade, # bootstrap from post-cascade state for all steps
+            reward=suffix_rewards[i],
+            next_observation=s_post_cascade,
             done=done,
             bootstrap_steps=n - i,
         )
@@ -447,6 +425,7 @@ def _env_kwargs_from_config(config: TrainingConfig) -> dict[str, Any]:
         "action_space": config.action_space,
         "obs_hops": config.obs_hops,
         "abandonment_nc_threshold": config.abandonment_nc_threshold,
+        "homogenize_reward": config.homogenize_reward,
     }
 
 
@@ -513,9 +492,7 @@ def generate_imitation_data(
                 seed=rollout_seed,
                 **env_kwargs,
             )
-            observation = _reset_with_non_empty_failures(
-                env, rollout_seed, rng, require_failed_gt_budget=True
-            )
+            observation = _reset_with_non_empty_failures(env, rollout_seed, rng)
             done = False
             while not done and observation.failed:
                 # Take one action at a time (env.step) rather than the full
@@ -660,17 +637,14 @@ def validate_policy_on_eval_set(
     instances: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any]:
     """Run greedy RL on a saved eval set file (same protocol as ``--eval-set``)."""
-    from collections import defaultdict
-
     from cascading_rl.evaluation.saved_eval_sets import evaluate_policies_on_saved_instances
 
     env_kwargs = _env_kwargs_from_config(config)
-    # Single-step policy: consistent with training and with heuristic baselines.
-    policy = build_greedy_policy(model, device=device, batch_actions=False)
+    policy = build_greedy_policy(model, device=device, batch_actions=True)
     factories: dict[str, Callable[[int, int], Any]] = {
         "rl": lambda _gi, _se: policy,
     }
-    overall, *_ = evaluate_policies_on_saved_instances(
+    overall, _ = evaluate_policies_on_saved_instances(
         instances,
         factories,
         env_kwargs=env_kwargs,
@@ -690,25 +664,10 @@ def validate_policy_on_eval_set(
         "solved_fraction_mean": summary.solved_fraction.mean,
         "rounds_mean": summary.rounds.mean,
     }
-
-    # Group instances by the alpha stored in each instance and compute per-alpha
-    # performance separately, instead of mapping the global mean to every alpha.
-    instances_by_alpha: dict[float, list] = defaultdict(list)
-    for inst in instances:
-        instances_by_alpha[float(inst.get("alpha", config.alpha))].append(inst)
-    per_alpha_anc: dict[float, float] = {}
-    for alpha_val, alpha_insts in instances_by_alpha.items():
-        a_overall, *_ = evaluate_policies_on_saved_instances(
-            alpha_insts,
-            factories,
-            env_kwargs=env_kwargs,
-            policy_names=["rl"],
-        )
-        per_alpha_anc[alpha_val] = a_overall["rl"].final_nc.mean
-
     mean_anc = summary.final_nc.mean
+    per_alpha_anc = {float(a): mean_anc for a in config.alpha_values}
     return {
-        "final_anc_mean": mean_anc,
+        "final_anc_mean": summary.final_nc.mean,
         "final_anc_stderr": summary.final_nc.stderr,
         "solved_fraction_mean": summary.solved_fraction.mean,
         "rounds_mean": summary.rounds.mean,
@@ -735,7 +694,7 @@ def validate_policy(
     device: torch.device,
     validation_graphs: Sequence[Any],
 ) -> dict[str, Any]:
-    policy = build_greedy_policy(model, device=device, batch_actions=False)
+    policy = build_greedy_policy(model, device=device, batch_actions=True)
     env_kwargs = _env_kwargs_from_config(config)
     reference_summaries = evaluate_policy_factories_on_graphs(
         validation_graphs,
@@ -887,6 +846,7 @@ def train_recovery_agent(config: TrainingConfig) -> tuple[RecoveryQNetwork, Trai
         n_range=config.n_range,
         m=config.m,
         seed=config.validation_seed,
+        graph_type=config.graph_type,
     )
     eval_set_instances: list[Mapping[str, Any]] | None = None
     if config.validation_eval_set_path:
@@ -910,7 +870,7 @@ def train_recovery_agent(config: TrainingConfig) -> tuple[RecoveryQNetwork, Trai
         warnings.warn(
             "Validating on synthetic graphs. Results will be noisy and not "
             "comparable across runs. Use --validation-eval-set with a fixed eval set (e.g. "
-            "eval_sets/validation_set.json) instead.",
+            "eval_sets/ds_validation.json) instead.",
             UserWarning,
             stacklevel=1,
         )
@@ -978,9 +938,17 @@ def train_recovery_agent(config: TrainingConfig) -> tuple[RecoveryQNetwork, Trai
             rng.shuffle(regime_combinations)
         alpha, pfail = regime_combinations[cycle_index]
 
+        if config.graph_type == "ba":
+            _make_graph = make_ba_graph
+        elif config.graph_type == "er":
+            _make_graph = make_er_graph
+        elif config.graph_type == "ws":
+            _make_graph = make_ws_graph
+        else:
+            raise ValueError(f"Unknown graph_type {config.graph_type!r}. Expected 'ba', 'er', or 'ws'.")
         if resolved_specs is not None:
             n, graph_seed = resolved_specs[episode % len(resolved_specs)]
-            graph = make_ba_graph(n=n, m=config.m, seed=graph_seed)
+            graph = _make_graph(n=n, m=config.m, seed=graph_seed)
             resolved_budget = _resolve_budget_for_graph(config, graph)
             resolved_max_rounds = _resolve_max_rounds_for_graph(config, graph)
             env = RecoveryEnv(
@@ -995,11 +963,10 @@ def train_recovery_agent(config: TrainingConfig) -> tuple[RecoveryQNetwork, Trai
             observation = _reset_with_non_empty_failures(env, graph_seed, rng)
             episode_failure_seed = graph_seed
         else:
-            # 70% new graph, 30% reuse from buffer when buffer is non-empty.
-            if not graph_buffer or rng.random() < 0.7:
+            if not graph_buffer or rng.random() < 0.3:
                 graph_size = rng.randint(config.n_range[0], config.n_range[1])
                 graph_struct_seed = rng.randint(0, 10**9)
-                graph = make_ba_graph(n=graph_size, m=config.m, seed=graph_struct_seed)
+                graph = _make_graph(n=graph_size, m=config.m, seed=graph_struct_seed)
                 graph_buffer.append(graph)
             else:
                 graph = rng.choice(list(graph_buffer))
@@ -1015,9 +982,7 @@ def train_recovery_agent(config: TrainingConfig) -> tuple[RecoveryQNetwork, Trai
                 seed=0,
                 **env_kwargs,
             )
-            observation = _reset_with_non_empty_failures(
-                env, failure_seed, rng, require_failed_gt_budget=True
-            )
+            observation = _reset_with_non_empty_failures(env, failure_seed, rng)
             episode_failure_seed = failure_seed
         if config.log_episode_spread:
             spread = _degree_minus_random_spread(
@@ -1045,9 +1010,8 @@ def train_recovery_agent(config: TrainingConfig) -> tuple[RecoveryQNetwork, Trai
             "nc": env.current_nc(),
             "failed_nodes": len(observation.failed),
         }
+        round_buffer: list[Transition] = []
 
-        # --- Single-step DQN with round-bounded n-step returns ---
-        round_buffer: list[Transition] = []  # intra-round transitions; flushed at each round end
         while not done and observation.failed:
             action = select_action(
                 model,
@@ -1074,9 +1038,6 @@ def train_recovery_agent(config: TrainingConfig) -> tuple[RecoveryQNetwork, Trai
             total_reward += reward
             training_state.total_steps += 1
 
-            # N-step returns: flush at round boundary so every intra-round transition
-            # gets suffix-discounted reward (r_k + γ·r_{k+1} + ... + γ^{n-k}·r_cascade)
-            # and bootstraps from the post-cascade state s_post_cascade.
             if not config.use_monte_carlo_returns:
                 if round_complete or done:
                     for t in rewrite_round(round_buffer, next_observation, config.gamma):
@@ -1089,7 +1050,6 @@ def train_recovery_agent(config: TrainingConfig) -> tuple[RecoveryQNetwork, Trai
             G = 0.0
             for trans in reversed(episode_buffer):
                 G = trans.reward + config.gamma * G
-                # done=True prevents bootstrap in compute_dqn_loss → target = G directly.
                 replay_buffer.push(
                     Transition(
                         observation=trans.observation,

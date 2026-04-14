@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Hashable, Iterable, Sequence
+from collections.abc import Hashable, Iterable
 
 import networkx as nx
 
@@ -16,55 +16,43 @@ def connected_component_sizes(graph: nx.Graph, active_nodes: Iterable[Node]) -> 
     return [len(component) for component in nx.connected_components(subgraph)]
 
 
-def pairwise_connectivity(graph: nx.Graph, active_nodes: Iterable[Node]) -> float:
-    """Pairwise connectivity relative to the full graph node set ``V``.
-
-    Counts unordered pairs of *active* nodes that belong to the same connected component
-    in the active induced subgraph, divided by ``|V|(|V|-1)`` (all unordered pairs in ``V``).
-    If there are fewer than two active nodes, returns ``0``.
-    """
-    active_set = set(active_nodes)
-    if len(active_set) < 2:
-        return 0.0
-    n_total = graph.number_of_nodes()
-    if n_total < 2:
-        return 0.0
-    component_sizes = connected_component_sizes(graph, active_set)
-    connected_pairs = sum(s * (s - 1) for s in component_sizes)
-    return connected_pairs / (n_total * (n_total - 1))
-
-
 def normalized_connectivity(graph: nx.Graph, active_nodes: Iterable[Node]) -> float:
-    """Historical name; same as :func:`pairwise_connectivity`."""
-    return pairwise_connectivity(graph, active_nodes)
+    """NC at a single point in time."""
+    total_nodes = graph.number_of_nodes()
+    if total_nodes == 0:
+        return 0.0
+    component_sizes = connected_component_sizes(graph, active_nodes)
+    return sum((s / total_nodes) ** 2 for s in component_sizes)
 
+def anc_fixed_horizon(nc_by_round: list[float], max_rounds: int) -> float:
+    """**Primary ANC metric.** Accumulated NC over a fixed horizon of max_rounds.
 
-def accumulated_normalized_connectivity(
-    graph: nx.Graph, active_nodes: Iterable[Node]
-) -> float:
-    """Historical name; now an alias for :func:`pairwise_connectivity`."""
-    return pairwise_connectivity(graph, active_nodes)
+    Episodes solved before max_rounds are padded with NC=1.0 (full connectivity),
+    rewarding faster recovery. Unsolved episodes use their actual NC trajectory.
+    Result is in [0, 1]. Use this for cross-episode comparisons.
 
-
-def anc_fixed_horizon(nc_by_round: Sequence[float], max_rounds: int) -> float:
-    """Mean NC over a fixed horizon ``max_rounds``, padding with 1.0 when the episode ends early.
-
-    When fewer than ``max_rounds`` values are recorded (e.g. full recovery), remaining
-    slots are treated as NC = 1.0, matching the RecoveryEnv discussion of solved episodes.
+    Padding assumption: a fully restored network stays at NC=1.0 indefinitely,
+    which is valid under the no-further-failure assumption after recovery.
     """
-    if max_rounds < 1:
-        return 0.0
-    seq = [float(x) for x in nc_by_round[:max_rounds]]
-    while len(seq) < max_rounds:
-        seq.append(1.0)
-    return sum(seq) / max_rounds
-
-
-def anc_adaptive_horizon(nc_by_round: Sequence[float]) -> float:
-    """Mean NC over the observed rounds (length of ``nc_by_round``)."""
     if not nc_by_round:
-        return 0.0
-    return float(sum(nc_by_round)) / len(nc_by_round)
+        return 1.0
+    if len(nc_by_round) >= max_rounds:
+        return sum(nc_by_round[:max_rounds]) / max_rounds
+    padded = nc_by_round + [1.0] * (max_rounds - len(nc_by_round))
+    return sum(padded) / max_rounds
+
+
+def anc_adaptive_horizon(nc_by_round: list[float]) -> float:
+    """**Secondary ANC metric.** Mean NC over rounds actually taken.
+
+    Does not penalise slow recovery — a policy solving in 10 rounds vs 2 rounds
+    can achieve the same score if per-round NC is identical. Use for analysing
+    per-round network quality independent of speed.
+    Result is in [0, 1].
+    """
+    if not nc_by_round:
+        return 1.0
+    return sum(nc_by_round) / len(nc_by_round)
 
 
 def largest_component_ratio(graph: nx.Graph, active_nodes: Iterable[Node]) -> float:

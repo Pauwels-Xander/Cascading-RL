@@ -1,15 +1,17 @@
 {
-  "generated_at": "2026-04-14T01:24:53.613563+00:00",
+  "generated_at": "2026-04-11T07:10:54.326678+00:00",
   "script": "scripts/train_policy.py",
   "argv": [
-    "scripts/train_policy.py"
+    "scripts/train_policy.py",
+    "--episodes",
+    "20000"
   ],
   "config_path": "config/default.yaml",
-  "config_sha256": "5c354825b891314b2de8b63ac9ed458880d8b9c671cb221bb07f3bd637df1a42",
-  "git_commit": "c528de6e34533058716b1e21b43323b14720c467",
-  "python_version": "3.13.3 (tags/v3.13.3:6280bb5, Apr  8 2025, 14:47:33) [MSC v.1943 64 bit (AMD64)]",
-  "platform": "Windows-11-10.0.26200-SP0",
-  "torch_version": "2.11.0+cpu",
+  "config_sha256": "9ef8e2e299344771ca1f325d8536162cad0a81e1b564ebe3c891a0ec909d02aa",
+  "git_commit": "fbc38e6c1f394b3609719f8b8625f7deaa7870c7",
+  "python_version": "3.14.3 (v3.14.3:323c59a5e34, Feb  3 2026, 11:41:37) [Clang 16.0.0 (clang-1600.0.26.6)]",
+  "platform": "macOS-26.3.1-arm64-arm-64bit-Mach-O",
+  "torch_version": "2.11.0",
   "checkpoint_path": "experiments/learner/recovery_q.pt",
   "summary_path": "experiments/learner/recovery_q.summary.json"
 }
