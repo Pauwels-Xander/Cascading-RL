@@ -7,7 +7,7 @@ from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any
 
-import yaml
+import yaml  # type: ignore[import-untyped]
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -22,6 +22,7 @@ from cascading_rl.training import (
     TrainingConfig,
     train_recovery_agent,
 )
+from cascading_rl.training.trainer import ROLLING_TRAIN_METRICS_EPISODES
 from scripts.reproducibility import write_run_metadata
 
 
@@ -55,7 +56,81 @@ def load_config(path: Path) -> dict[str, Any]:
     return data
 
 
+# Keys that must be present under ``training`` / nested maps so a run without CLI
+# overrides uses the YAML-defined hyperparameters for those fields.
+_REQUIRED_TRAINING_KEYS = frozenset(
+    {
+        "seed",
+        "device",
+        "regime",
+        "graph",
+        "num_episodes",
+        "replay_capacity",
+        "warmup_transitions",
+        "batch_size",
+        "gamma",
+        "learning_rate",
+        "epsilon_start",
+        "epsilon_end",
+        "target_update_interval",
+        "hidden_dim",
+        "embed_dim",
+        "num_layers",
+        "validation_graphs",
+        "validation_seeds",
+        "validation_every",
+        "checkpoint_dir",
+        "checkpoint_name",
+    }
+)
+_REQUIRED_REGIME_KEYS = frozenset({"alpha", "pfail", "budget", "max_rounds"})
+_REQUIRED_GRAPH_KEYS = frozenset({"n_range", "m"})
+
+
+def _validate_config_for_training(config: dict[str, Any]) -> None:
+    """Ensure ``config`` has the structure :func:`build_training_config` expects."""
+    if "training" not in config:
+        raise ValueError("Config must contain a top-level 'training' mapping.")
+    training = config["training"]
+    if not isinstance(training, dict):
+        raise ValueError("Config 'training' must be a mapping.")
+    missing = _REQUIRED_TRAINING_KEYS - training.keys()
+    if missing:
+        raise ValueError(
+            "Config 'training' is missing required keys (define them in your YAML): "
+            + ", ".join(sorted(missing))
+        )
+    regime = training.get("regime")
+    if not isinstance(regime, dict):
+        raise ValueError("Config 'training.regime' must be a mapping.")
+    mr = _REQUIRED_REGIME_KEYS - regime.keys()
+    if mr:
+        raise ValueError(
+            "Config 'training.regime' is missing required keys: " + ", ".join(sorted(mr))
+        )
+    graph = training.get("graph")
+    if not isinstance(graph, dict):
+        raise ValueError("Config 'training.graph' must be a mapping.")
+    mg = _REQUIRED_GRAPH_KEYS - graph.keys()
+    if mg:
+        raise ValueError(
+            "Config 'training.graph' is missing required keys: " + ", ".join(sorted(mg))
+        )
+    if "evaluation" not in config:
+        raise ValueError(
+            "Config must contain a top-level 'evaluation' mapping "
+            "(used for validation_tau fallback via evaluation.tau)."
+        )
+
+
 def build_training_config(config: dict[str, Any], *, episodes_override: int | None = None) -> TrainingConfig:
+    """Build :class:`TrainingConfig` from a loaded YAML root dict.
+
+    With the default ``--config`` (e.g. ``config/default.yaml``), training uses the
+    ``training`` / ``training.regime`` / ``training.graph`` sections and optional
+    ``budget_scaling``. Optional keys omitted from YAML still fall back to
+    :class:`TrainingConfig` dataclass defaults.
+    """
     defaults = TrainingConfig()
     training = config["training"]
     regime = training["regime"]
@@ -104,10 +179,8 @@ def build_training_config(config: dict[str, Any], *, episodes_override: int | No
         abandonment_nc_threshold=(
             float(abandon_raw) if abandon_raw is not None else None
         ),
-        homogenize_reward=bool(regime.get("homogenize_reward", defaults.homogenize_reward)),
         n_range=tuple(graph["n_range"]),
         m=int(graph["m"]),
-        graph_type=str(graph.get("graph_type", defaults.graph_type)),
         num_episodes=num_episodes,
         replay_capacity=int(training["replay_capacity"]),
         warmup_transitions=int(training["warmup_transitions"]),
@@ -216,7 +289,7 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "Periodic validation on this JSON/YAML eval set (default: training.validation_eval_set_path "
-            "from config, e.g. eval_sets/ds_validation.json). Overrides the config path when set."
+            "from config, e.g. eval_sets/validation_set.json). Overrides the config path when set."
         ),
     )
     parser.add_argument(
@@ -225,18 +298,23 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Override validation interval (episodes).",
     )
-    parser.add_argument(
-        "--no-homogenize-reward",
-        action="store_true",
-        help="Ablation: use per-step NC-gain reward instead of homogenized round-level reward.",
-    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
     config = load_config(args.config)
-    training_config = build_training_config(config, episodes_override=None)
+    _validate_config_for_training(config)
+    training_config = build_training_config(config, episodes_override=args.episodes)
+    _ep_src = (
+        f"CLI --episodes={args.episodes}"
+        if args.episodes is not None
+        else "YAML training.num_episodes"
+    )
+    print(
+        f"Training config: {args.config.resolve()} | "
+        f"num_episodes={training_config.num_episodes} ({_ep_src})"
+    )
 
     if args.alpha is not None:
         training_config = replace(training_config, alpha=args.alpha)
@@ -246,8 +324,6 @@ def main() -> None:
         training_config = replace(training_config, alpha_values=tuple(args.alpha_values))
     if args.pfail_values is not None:
         training_config = replace(training_config, pfail_values=tuple(args.pfail_values))
-    if args.episodes is not None:
-        training_config = replace(training_config, num_episodes=args.episodes)
     if args.log_episode_spread:
         training_config = replace(training_config, log_episode_spread=True)
     if args.log_grad_norm:
@@ -264,8 +340,6 @@ def main() -> None:
         training_config = replace(
             training_config, validation_every=int(args.validation_every)
         )
-    if args.no_homogenize_reward:
-        training_config = replace(training_config, homogenize_reward=False)
     if args.checkpoint_dir is not None:
         training_config = replace(training_config, checkpoint_dir=args.checkpoint_dir)
 
@@ -278,6 +352,10 @@ def main() -> None:
         )
 
     _, training_state, checkpoint_path = train_recovery_agent(training_config)
+
+    _w = ROLLING_TRAIN_METRICS_EPISODES
+    _rec_tail = training_state.episode_recovered[-_w:]
+    _anc_tail = training_state.episode_mean_anc_unconditional[-_w:]
 
     summary_path = checkpoint_path.with_suffix(".summary.json")
     summary = {
@@ -300,6 +378,13 @@ def main() -> None:
             sum(training_state.episode_final_nc[-10:])
             / max(1, len(training_state.episode_final_nc[-10:]))
         ),
+        "rolling_recovered_fraction": (
+            sum(1 for x in _rec_tail if x) / len(_rec_tail) if _rec_tail else 0.0
+        ),
+        "rolling_mean_anc_unconditional": (
+            sum(_anc_tail) / len(_anc_tail) if _anc_tail else 0.0
+        ),
+        "rolling_metrics_episodes": _w,
         "final_loss_mean_last_10": (
             sum(training_state.losses[-10:]) / max(1, len(training_state.losses[-10:]))
         ),

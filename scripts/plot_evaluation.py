@@ -47,16 +47,18 @@ def _mean_err(data: dict, policy: str, key: str) -> tuple[float, float]:
         return float(p[key]["mean"]), float(p[key].get("stderr", 0.0))
     # old flat format fallbacks
     flat_map = {
-        "final_nc": ("final_anc_mean", "final_anc_stderr"),
+        "final_nc": ("final_nc_mean", "final_nc_stderr"),
         "solved_fraction": ("solved_fraction_mean", None),
         "rounds": ("rounds_mean", None),
     }
     if key in flat_map:
         mk, ek = flat_map[key]
-        mean = float(p.get(mk, 0.0))
-        err = float(p.get(ek, 0.0)) if ek else 0.0
+        if mk not in p:
+            return None, None
+        mean = float(p[mk]) if p[mk] is not None else None
+        err = 0.0 if not ek else (float(p[ek]) if p.get(ek) is not None else None)
         return mean, err
-    return 0.0, 0.0
+    return None, None
 
 
 def _scalar(data: dict, policy: str, key: str) -> float | None:
@@ -93,9 +95,13 @@ def plot_main_metrics(data: dict, policies: list[str], out_dir: Path):
     ]
 
     for key, title, ylabel, filename in metrics:
+        metric_pairs = [_mean_err(data, p, key) for p in policies]
+        if any(mean is None or err is None for mean, err in metric_pairs):
+            print(f"Skipping {filename}: missing metric data in summary.")
+            continue
         fig, ax = plt.subplots(figsize=(7, 4))
-        vals = [_mean_err(data, p, key)[0] for p in policies]
-        errs = [_mean_err(data, p, key)[1] for p in policies]
+        vals = [mean for mean, _ in metric_pairs]
+        errs = [err for _, err in metric_pairs]
         bar_chart(ax, policies, vals, errs, title, ylabel, POLICY_COLORS)
         plt.tight_layout()
         path = out_dir / f"{filename}.png"
@@ -140,8 +146,13 @@ def plot_decision_quality(data: dict, policies: list[str], out_dir: Path):
 
     for key, title, ylabel, filename in new_metrics:
         fig, ax = plt.subplots(figsize=(7, 4))
-        vals = [_mean_err(data, p, key)[0] for p in policies]
-        errs = [_mean_err(data, p, key)[1] for p in policies]
+        metric_pairs = [_mean_err(data, p, key) for p in policies]
+        if any(mean is None or err is None for mean, err in metric_pairs):
+            print(f"Skipping {filename}: missing metric data in summary.")
+            plt.close()
+            continue
+        vals = [mean for mean, _ in metric_pairs]
+        errs = [err for _, err in metric_pairs]
         bar_chart(ax, policies, vals, errs, title, ylabel, POLICY_COLORS)
         plt.tight_layout()
         path = out_dir / f"{filename}.png"
@@ -159,16 +170,54 @@ def plot_nc_gain_comparison(data: dict, policies: list[str], out_dir: Path):
     x = np.arange(len(policies))
     width = 0.35
 
-    chosen_means = [_mean_err(data, p, "mean_nc_gain")[0] for p in policies]
-    chosen_errs  = [_mean_err(data, p, "mean_nc_gain")[1] for p in policies]
-    greedy_means = [_mean_err(data, p, "mean_greedy_nc_gain")[0] for p in policies]
-    greedy_errs  = [_mean_err(data, p, "mean_greedy_nc_gain")[1] for p in policies]
+    chosen_idx: list[int] = []
+    chosen_means: list[float] = []
+    chosen_errs: list[float] = []
+    greedy_idx: list[int] = []
+    greedy_means: list[float] = []
+    greedy_errs: list[float] = []
 
-    ax.bar(x - width/2, chosen_means, width, yerr=chosen_errs, capsize=4,
-           label="Chosen action", color=[POLICY_COLORS.get(p, "#607D8B") for p in policies],
-           alpha=0.85, edgecolor="white")
-    ax.bar(x + width/2, greedy_means, width, yerr=greedy_errs, capsize=4,
-           label="Greedy oracle", color="lightgray", alpha=0.85, edgecolor="white")
+    for idx, policy in enumerate(policies):
+        chosen_mean, chosen_err = _mean_err(data, policy, "mean_nc_gain")
+        if chosen_mean is not None and chosen_err is not None:
+            chosen_idx.append(idx)
+            chosen_means.append(chosen_mean)
+            chosen_errs.append(chosen_err)
+
+        greedy_mean, greedy_err = _mean_err(data, policy, "mean_greedy_nc_gain")
+        if greedy_mean is not None and greedy_err is not None:
+            greedy_idx.append(idx)
+            greedy_means.append(greedy_mean)
+            greedy_errs.append(greedy_err)
+
+    if not chosen_idx and not greedy_idx:
+        plt.close()
+        return
+
+    if chosen_idx:
+        ax.bar(
+            x[chosen_idx] - width / 2,
+            chosen_means,
+            width,
+            yerr=chosen_errs,
+            capsize=4,
+            label="Chosen action",
+            color=[POLICY_COLORS.get(policies[idx], "#607D8B") for idx in chosen_idx],
+            alpha=0.85,
+            edgecolor="white",
+        )
+    if greedy_idx:
+        ax.bar(
+            x[greedy_idx] + width / 2,
+            greedy_means,
+            width,
+            yerr=greedy_errs,
+            capsize=4,
+            label="Greedy oracle",
+            color="lightgray",
+            alpha=0.85,
+            edgecolor="white",
+        )
 
     ax.set_xticks(x)
     ax.set_xticklabels(policies, fontsize=9)
@@ -193,16 +242,25 @@ def plot_anc_comparison(data: dict, policies: list[str], out_dir: Path):
     fig, ax = plt.subplots(figsize=(9, 5))
     x = np.arange(len(policies))
     width = 0.25
+    plotted_any = False
 
     for i, (key, label, hatch) in enumerate([
         ("final_nc",     "Final NC (snapshot)", ""),
         ("anc_fixed",    "ANC Fixed Horizon",   "//"),
         ("anc_adaptive", "ANC Adaptive Horizon", ".."),
     ]):
-        means = [_mean_err(data, p, key)[0] for p in policies]
-        errs  = [_mean_err(data, p, key)[1] for p in policies]
+        metric_pairs = [_mean_err(data, p, key) for p in policies]
+        if any(mean is None or err is None for mean, err in metric_pairs):
+            continue
+        means = [mean for mean, _ in metric_pairs]
+        errs  = [err for _, err in metric_pairs]
         ax.bar(x + (i - 1) * width, means, width, yerr=errs, capsize=3,
                label=label, hatch=hatch, alpha=0.85, edgecolor="white")
+        plotted_any = True
+
+    if not plotted_any:
+        plt.close()
+        return
 
     ax.set_xticks(x)
     ax.set_xticklabels(policies, fontsize=9)
@@ -238,6 +296,11 @@ def main():
 
     data = load_summary(args.summary)
     policies = get_policies(data)
+    if not policies:
+        sys.stderr.write(
+            f"No plottable policies found in summary: {args.summary}\n"
+        )
+        sys.exit(1)
     out_dir = args.output_dir or args.summary.parent
     out_dir.mkdir(parents=True, exist_ok=True)
 

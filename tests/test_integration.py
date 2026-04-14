@@ -1,4 +1,5 @@
 import networkx as nx
+import pytest
 
 from cascading_rl.envs.recovery import RecoveryEnv
 from cascading_rl.evaluation import estimate_minimum_budget, evaluate_policies
@@ -58,7 +59,8 @@ def test_budget_search_runs_on_generated_graph():
 
 def test_environment_reward_matches_anc_gain_on_manual_state():
     graph = nx.star_graph(3)
-    env = RecoveryEnv(graph, alpha=1.0, pfail=0.0, budget=2)
+    # budget=1: the single repair step closes the round, so reward = full cascade-inclusive delta.
+    env = RecoveryEnv(graph, alpha=1.0, pfail=0.0, budget=1)
 
     observation = env.reset()
     env.state.active = {1, 2}
@@ -66,12 +68,13 @@ def test_environment_reward_matches_anc_gain_on_manual_state():
     env.state.frontier = {3}
     env.state.loads = {0: 0.0, 1: 1.0, 2: 1.0, 3: 1.0}
     env.state.capacities = {0: 2.0, 1: 2.0, 2: 2.0, 3: 2.0}
+    # Active {1,2}: both isolated (connected only through failed center 0) → NC = 0.
+    env._round_start_nc = 0.0
 
     _, reward, _, info = env.step(0)
 
-    # Intra-round step (b=1 of B=2, budget=2): reward is 0 under the
-    # homogenised reward scheme. The full round delta NC is assigned only at
-    # the last step (b=B) when the cascade fires. This ensures the replay
-    # buffer contains structurally homogeneous Bellman targets.
-    assert reward == 0.0
+    # Round-closing step: reward = NC_after_cascade − NC_at_round_start.
+    # Active {0,1,2} → one component of 3 in N=4 graph: 3*2/(4*3) = 0.5.
+    assert reward == pytest.approx(info["nc_after_cascade"] - 0.0)
+    assert reward == pytest.approx(0.5)
     assert info["nc"] == info["nc_after_cascade"]
