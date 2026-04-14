@@ -1106,7 +1106,6 @@ def main() -> None:
 
     print(f"Saved evaluation summary to {summary_path}")
     print(f"Saved grid evaluation summary to {grid_path}")
-    print(f"Saved regime evaluation summary to {regime_path}")
     for policy_name, metrics in summary_payload.items():
         if policy_name in {
             "checkpoint",
