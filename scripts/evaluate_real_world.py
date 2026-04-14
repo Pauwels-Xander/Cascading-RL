@@ -176,7 +176,9 @@ def evaluate_dataset(
     device = torch.device("cpu")
     rl_policy = build_greedy_policy(model, device=device, batch_actions=False)
 
-    baseline_factories = build_policy_factories(base_seed=0)
+    # Use sequential greedy for large graphs: exhaustive O(C(|failed|,k)) search
+    # is infeasible once budget scaling pushes k beyond ~5.
+    baseline_factories = build_policy_factories(base_seed=0, sequential_greedy=True)
     policy_factories = {
         "rl": lambda gi, se: rl_policy,
         **baseline_factories,

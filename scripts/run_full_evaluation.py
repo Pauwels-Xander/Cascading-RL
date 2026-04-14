@@ -73,8 +73,8 @@ def parse_args() -> argparse.Namespace:
                    help="Graphs per cell for Tiers 1a/1b/1d/1e (default: 40).")
     p.add_argument("--seeds", type=int, nargs="+", default=list(range(5)),
                    help="Failure seeds for in-dist and topo ablation (default: 0..4).")
-    p.add_argument("--ood-seeds", type=int, nargs="+", default=list(range(20)),
-                   help="Failure seeds for OOD real-world (default: 0..19).")
+    p.add_argument("--ood-seeds", type=int, nargs="+", default=list(range(5)),
+                   help="Failure seeds for OOD real-world (default: 0..4).")
     # Large-BA specific — scaled down to keep runtime manageable
     p.add_argument("--large-ba-num-graphs", type=int, default=30,
                    help="Graphs for Tier 1c large-BA sweep (default: 30).")
@@ -169,6 +169,7 @@ def main() -> None:
             "--num-graphs", str(args.large_ba_num_graphs),
             "--seeds",      *large_ba_seeds_str,
             "--output-dir", ROOT / "experiments" / "eval_param_generalization" / f"ba_{n_range_tag}",
+            "--sequential-greedy",
         ])
 
     # ------------------------------------------------------------------

@@ -55,15 +55,34 @@ round.
 \paragraph{Parameter grid.}
 All evaluations sweep a $(\alpha,\pfail,B)$ grid defined as follows:
 \begin{itemize}
-  \item $\alpha \in \{0.10,\;0.20,\;0.25,\;0.30\}$ — capacity slack,
-        spanning low to high network resilience; $\alpha^{\dagger}=0.25$
-        is the training value.
+  \item $\alpha \in \{0.10,\;0.20,\;0.25,\;0.30\}$ — capacity slack.
+        Values below $0.10$ produce networks so fragile that almost any
+        initial failure cascades to total collapse, leaving no meaningful
+        recovery signal; values above $0.30$ make networks so robust that
+        all policies trivially succeed.
+        The four values provide low/mid/train/high coverage, with
+        $\alpha^{\dagger}=0.25$ being the training value.
+
   \item $\pfail \in \{0.05,\;0.15,\;0.20,\;0.25\}$ — initial node
-        failure probability, spanning near-intact to severely damaged
-        networks; $\pfail^{\dagger}=0.20$ is the training value.
+        failure probability.
+        Below $0.05$ the cascade rarely propagates and recovery is
+        near-trivial; above $0.25$ the damage is so severe that no
+        heuristic recovers more than a small fraction of episodes.
+        A preliminary regime-sensitivity analysis (Section~\ref{sec:regime})
+        identified $\pfail=0.15$ as the most decision-sensitive value —
+        the point of largest spread in \ancfix{} across policies — making
+        it a natural inclusion alongside the training value
+        $\pfail^{\dagger}=0.20$.
+
   \item $B \in \{1,\;2,\;3\}$ — reference repair budget per round,
-        scaled linearly with graph size relative to $\nstar=40$ nodes;
-        $B^{\dagger}=2$ is the training value.
+        scaled linearly with graph size relative to $\nstar=40$ nodes.
+        $B=1$ represents the tightest repair constraint, where policy
+        quality matters most; $B=3$ is sufficient for most regimes to
+        reach near-full recovery under any reasonable policy.
+        $B=4$ was excluded because preliminary results showed it adds
+        negligible discrimination — at $B=3$ the majority of cells
+        already saturate near Solved\,$=1$ for the top heuristics.
+        The training value $B^{\dagger}=2$ is included.
 \end{itemize}
 The training cell $(\alpha^{\dagger},\pfail^{\dagger},B^{\dagger})$ is
 explicitly included and flagged in all tables.
@@ -73,6 +92,28 @@ with 40 graphs $\times$ 5 seeds $= 200$ episodes per cell.
 \paragraph{Evaluation settings.}
 Five graph settings are evaluated; Table~\ref{tab:settings} summarises
 the key parameters.
+Each setting is motivated by a distinct generalisation question.
+\textbf{Small ER and Small WS} use the same node count as the training
+graphs ($n\in[30,50]$) but structurally different topologies:
+Erd\H{o}s--R\'enyi graphs have no hubs (Poisson degree distribution),
+and Watts--Strogatz graphs combine a near-uniform degree distribution
+with high local clustering.
+Together they test whether the policy generalises across graph structure,
+or whether it has overfit to the scale-free, hub-dominated topology of
+the training distribution.
+\textbf{Large BA} uses the same Barab\'asi--Albert topology as training
+but with graphs $2.5$--$7.5\times$ larger ($n\in[100,300]$).
+The repair budget is scaled proportionally to $n$, holding budget
+intensity (repairs per node per round) constant across sizes.
+This isolates graph scale as the sole source of distribution shift,
+testing whether the GNN features transfer to larger networks.
+\textbf{IEEE 300-bus} is a fixed empirical power transmission network
+with a sparse, tree-like topology unlike any synthetic graph used in
+training.
+It tests whether the cascade dynamics and learned recovery strategy
+transfer to a real infrastructure topology, where degree distribution,
+connectivity, and spatial structure differ substantially from all
+training graphs.
 
 \begin{table}[htbp]
 \centering
@@ -571,6 +612,37 @@ Random      & \todo{}   & \todo{}   & \todo{} & \todo{} & \todo{} \\
 % TODO: Figure — bar chart comparing ANC-fix on Small BA vs IEEE 300-bus
 %       per policy at the training regime (alpha=0.25, pfail=0.20, B=2).
 %       Source: eval_param_generalization/ba_30_50/ and eval_real_world/
+
+% ===========================================================================
+\section{Main Results Table}
+\label{sec:main_results}
+% ===========================================================================
+
+\begin{table}[htbp]
+\centering
+\caption{Main results on Small BA graphs at training regime
+  $(\alpha=0.25,\, \pfail=0.20,\, B=2)$.
+  Mean $\pm$ 95\,\% CI over 200 episodes (40 graphs $\times$ 5 seeds).
+  $\dagger$ denotes the training condition.
+  Rounds to solve is conditioned on solved episodes only.
+  RL results \todo{to be filled}.}
+\label{tab:main}
+\setlength{\tabcolsep}{8pt}
+\begin{tabular}{lcccc}
+\toprule
+Policy & \ancfix{} $\uparrow$ & FinalNC $\uparrow$
+       & Solved (\%) $\uparrow$ & Rounds$^{*}$ $\downarrow$ \\
+\midrule
+Random                    & $0.397 \pm 0.049$ & $0.746$ & $26.5$ & $2.5$ \\
+Degree                    & $0.908 \pm 0.016$ & $1.000$ & $99.5$ & $6.3$ \\
+Betweenness               & $0.905 \pm 0.016$ & $1.000$ & $99.5$ & $6.4$ \\
+Risk                      & $0.566 \pm 0.044$ & $0.913$ & $59.0$ & $9.5$ \\
+Greedy                    & $0.946 \pm 0.007$ & $1.000$ & $100.0$ & $5.1$ \\
+\midrule
+RL (ours)$^{\dagger}$     & \todo{}           & \todo{} & \todo{} & \todo{} \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \bibliographystyle{apalike}
 \bibliography{references}

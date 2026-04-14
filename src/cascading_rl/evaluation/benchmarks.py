@@ -15,6 +15,7 @@ from cascading_rl.envs.recovery import RecoveryEnv, RecoveryObservation
 from cascading_rl.metrics.connectivity import anc_fixed_horizon, anc_adaptive_horizon
 from cascading_rl.policies import (
     choose_greedy_nc_node,
+    choose_sequential_greedy_nc_node,
     choose_highest_betweenness_failed_node,
     choose_highest_degree_failed_node,
     choose_highest_overload_risk_node,
@@ -630,18 +631,33 @@ def evaluate_policies(
     return summaries
 
 
-def build_policy_factories(base_seed: int = 0) -> dict[str, PolicyFactory]:
-    """Create baseline policy factories for matched-seed sweeps."""
+def build_policy_factories(
+    base_seed: int = 0,
+    sequential_greedy: bool = False,
+) -> dict[str, PolicyFactory]:
+    """Create baseline policy factories for matched-seed sweeps.
+
+    Parameters
+    ----------
+    base_seed:
+        Seed base for the random policy RNG.
+    sequential_greedy:
+        If True, replace the exhaustive O(C(|failed|,k)) greedy with the
+        sequential O(|failed|*k) approximation.  Use this for large graphs
+        (Large BA, IEEE 300-bus) where exhaustive search is infeasible.
+    """
 
     def random_factory(graph_index: int, seed: int) -> Policy:
         rng = Random(f"{base_seed}:{graph_index}:{seed}")
         return lambda observation: choose_random_failed_node(observation, rng=rng)
 
+    greedy_fn = choose_sequential_greedy_nc_node if sequential_greedy else choose_greedy_nc_node
+
     return {
         "random": random_factory,
         "degree": lambda graph_index, seed: choose_highest_degree_failed_node,
         "risk": lambda graph_index, seed: choose_highest_overload_risk_node,
-        "greedy": lambda graph_index, seed: choose_greedy_nc_node,
+        "greedy": lambda graph_index, seed: greedy_fn,
         "betweenness": lambda graph_index, seed: choose_highest_betweenness_failed_node,
     }
 

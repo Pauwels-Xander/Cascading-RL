@@ -1,0 +1,32 @@
+{
+  "generated_at": "2026-04-14T08:29:09.998929+00:00",
+  "script": "scripts/evaluate_real_world.py",
+  "argv": [
+    "scripts/evaluate_real_world.py",
+    "--checkpoint",
+    "experiments/learner/recovery_q.pt",
+    "--config",
+    "config/default.yaml",
+    "--alpha",
+    "0.25",
+    "--pfail",
+    "0.15",
+    "--budget",
+    "3",
+    "--seeds",
+    "0",
+    "1",
+    "2",
+    "--output-dir",
+    "experiments/eval_real_world/a0.25_p0.15_b3"
+  ],
+  "config_path": "config/default.yaml",
+  "config_sha256": "0846ce3d1c1c3eee9b8e744e97189dce5082271723c0244c3673fd6fd0eb6ad4",
+  "git_commit": "b4ce5a0a03b72b7dbaa59ecaecc6e1648af745a7",
+  "python_version": "3.14.3 (v3.14.3:323c59a5e34, Feb  3 2026, 11:41:37) [Clang 16.0.0 (clang-1600.0.26.6)]",
+  "platform": "macOS-26.3.1-arm64-arm-64bit-Mach-O",
+  "torch_version": "2.11.0",
+  "dataset": "ieee300",
+  "summary_path": "experiments/eval_real_world/a0.25_p0.15_b3/ieee300/evaluation_summary.json",
+  "checkpoint_path": "experiments/learner/recovery_q.pt"
+}
