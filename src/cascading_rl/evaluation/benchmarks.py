@@ -633,7 +633,7 @@ def evaluate_policies(
 
 def build_policy_factories(
     base_seed: int = 0,
-    sequential_greedy: bool = False,
+    sequential_greedy: bool = True,
 ) -> dict[str, PolicyFactory]:
     """Create baseline policy factories for matched-seed sweeps.
 
@@ -642,9 +642,12 @@ def build_policy_factories(
     base_seed:
         Seed base for the random policy RNG.
     sequential_greedy:
-        If True, replace the exhaustive O(C(|failed|,k)) greedy with the
-        sequential O(|failed|*k) approximation.  Use this for large graphs
-        (Large BA, IEEE 300-bus) where exhaustive search is infeasible.
+        If True (default), use sequential O(|failed|*k) greedy — selects one
+        node at a time for k steps, always choosing the highest marginal NC
+        gain.  This is tractable at all graph sizes and is the canonical greedy
+        algorithm from the submodular maximisation literature (Nemhauser et al.,
+        1978).  Set to False only to reproduce the exhaustive O(C(|failed|,k))
+        exact search used in early small-graph experiments.
     """
 
     def random_factory(graph_index: int, seed: int) -> Policy:

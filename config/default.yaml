@@ -5,7 +5,7 @@ graph:
 budget_scaling:
   enabled: true
   reference_n: 40
-  scale_max_rounds: true
+  scale_max_rounds: false
 
 evaluation:
   # Target mean fully-restored rate for minimum-budget (b*) search in evaluate/run_budget_search.
@@ -48,7 +48,7 @@ training:
     # Set to false for the per-step NC-gain ablation (denser signal, mixed Bellman targets).
     homogenize_reward: true
   graph:
-    n_range: [40, 80]
+    n_range: [30, 50]
     m: 2
     # Graph family: "ba" (Barabasi-Albert), "er" (Erdos-Renyi), or "ws" (Watts-Strogatz).
     graph_type: ba

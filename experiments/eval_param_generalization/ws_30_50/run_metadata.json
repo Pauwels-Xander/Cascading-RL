@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-12T16:14:06.304429+00:00",
+  "generated_at": "2026-04-14T20:08:28.252502+00:00",
   "script": "scripts/evaluate_param_generalization.py",
   "argv": [
     "scripts/evaluate_param_generalization.py",
@@ -35,8 +35,8 @@
     "experiments/eval_param_generalization/ws_30_50"
   ],
   "config_path": "config/default.yaml",
-  "config_sha256": "3e8a0c7a31c608d6457f5f8c80ab5e148752d3d6abd9784acc89205f65386c3c",
-  "git_commit": "4c26d96ca4778b4788246a634238ab9300f8e234",
+  "config_sha256": "0846ce3d1c1c3eee9b8e744e97189dce5082271723c0244c3673fd6fd0eb6ad4",
+  "git_commit": "aeaa7ca7cfdbefa5b0367082b3505224fddda69d",
   "python_version": "3.14.3 (v3.14.3:323c59a5e34, Feb  3 2026, 11:41:37) [Clang 16.0.0 (clang-1600.0.26.6)]",
   "platform": "macOS-26.3.1-arm64-arm-64bit-Mach-O",
   "torch_version": "2.11.0",

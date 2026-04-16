@@ -121,9 +121,9 @@ def parse_args() -> argparse.Namespace:
                         help="Failure seeds per graph (default: 0..9).")
     parser.add_argument("--output-dir", type=Path,
                         default=ROOT / "experiments" / "eval_param_generalization")
-    parser.add_argument("--sequential-greedy", action="store_true",
-                        help="Use sequential O(|failed|*k) greedy instead of exhaustive "
-                             "O(C(|failed|,k)) search. Required for large graphs.")
+    parser.add_argument("--no-sequential-greedy", action="store_true",
+                        help="Revert to exhaustive O(C(|failed|,k)) greedy. Only feasible "
+                             "on small graphs (n<=50, k<=2). Default is sequential greedy.")
     return parser.parse_args()
 
 
@@ -204,11 +204,11 @@ def main() -> None:
     print(f"Generated {args.num_graphs} graphs: n in [{min(sizes)}, {max(sizes)}] "
           f"mean_n={avg_n:.1f}  avg_degree={avg_deg:.2f}")
 
-    if args.sequential_greedy:
-        print("Greedy: sequential approximation O(|failed|*k)  [exhaustive search disabled]")
+    use_sequential = not args.no_sequential_greedy
+    print(f"Greedy: {'sequential O(|failed|*k)' if use_sequential else 'exhaustive O(C(|failed|,k))'}")
     policy_factories = {
         "rl": lambda gi, se: rl_policy,
-        **build_policy_factories(base_seed=0, sequential_greedy=args.sequential_greedy),
+        **build_policy_factories(base_seed=0, sequential_greedy=use_sequential),
     }
 
     cells: list[dict] = []

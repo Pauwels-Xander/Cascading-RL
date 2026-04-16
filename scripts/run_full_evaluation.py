@@ -11,9 +11,9 @@ Six tiers, all driven by the same (alpha, pfail, budget) grid:
              Output: experiments/eval_topology_ablation/a{alpha}_p{pfail}_b{budget}/
 
   Tier 1c — Large BA param grid          (evaluate_param_generalization.py)
-             BA n∈[100,300] — tests size generalisation. One invocation.
-             Scaled down: 30 graphs, 5 seeds (vs 100/10 for small graphs).
-             Output: experiments/eval_param_generalization/ba_100_300/
+             BA n=100 — tests size generalisation. One invocation.
+             40 graphs, 5 seeds = 200 episodes/cell (matches small-graph settings).
+             Output: experiments/eval_param_generalization/ba_100_100/
 
   Tier 1d — ER param grid                (evaluate_param_generalization.py)
              Erdős-Rényi n∈[30,50]. One invocation.
@@ -73,23 +73,26 @@ def parse_args() -> argparse.Namespace:
                    help="Graphs per cell for Tiers 1a/1b/1d/1e (default: 40).")
     p.add_argument("--seeds", type=int, nargs="+", default=list(range(5)),
                    help="Failure seeds for in-dist and topo ablation (default: 0..4).")
-    p.add_argument("--ood-seeds", type=int, nargs="+", default=list(range(5)),
-                   help="Failure seeds for OOD real-world (default: 0..4).")
-    # Large-BA specific — scaled down to keep runtime manageable
-    p.add_argument("--large-ba-num-graphs", type=int, default=30,
-                   help="Graphs for Tier 1c large-BA sweep (default: 30).")
+    p.add_argument("--ood-seeds", type=int, nargs="+", default=list(range(40)),
+                   help="Failure seeds for OOD real-world (default: 0..39, 40 seeds).")
+    # Large-BA specific — 40 graphs x 5 seeds = 200 episodes/cell, n fixed at 100
+    p.add_argument("--large-ba-num-graphs", type=int, default=40,
+                   help="Graphs for Tier 1c large-BA sweep (default: 40).")
     p.add_argument("--large-ba-seeds", type=int, nargs="+", default=list(range(5)),
                    help="Failure seeds for Tier 1c (default: 0..4).")
     p.add_argument("--large-ba-n-low", type=int, default=100,
                    help="Min graph size for Tier 1c (default: 100).")
-    p.add_argument("--large-ba-n-high", type=int, default=300,
-                   help="Max graph size for Tier 1c (default: 300).")
+    p.add_argument("--large-ba-n-high", type=int, default=100,
+                   help="Max graph size for Tier 1c (default: 100).")
     p.add_argument("--skip-indist",   action="store_true", help="Skip Tier 1a  (BA 30-50 in-dist).")
     p.add_argument("--skip-large-ba", action="store_true", help="Skip Tier 1c  (BA 100-500).")
     p.add_argument("--skip-er",       action="store_true", help="Skip Tier 1d  (ER 30-50).")
     p.add_argument("--skip-ws",       action="store_true", help="Skip Tier 1e  (WS 30-50).")
     p.add_argument("--skip-topo",     action="store_true", help="Skip Tier 1b  (topology ablation).")
     p.add_argument("--skip-ood",      action="store_true", help="Skip Tier 2   (OOD real-world).")
+    p.add_argument("--results-tag", type=str, default="",
+                   help="Optional tag appended to all output dirs, e.g. '_seq' to separate "
+                        "sequential-greedy results from exhaustive-greedy results.")
     return p.parse_args()
 
 
@@ -108,6 +111,7 @@ def run(cmd: list) -> None:
 
 def main() -> None:
     args = parse_args()
+    tag = args.results_tag  # e.g. "_seq" or ""
     grid = list(itertools.product(args.alpha, args.pfail, args.budget))
     total_cells = len(grid)
     seeds_str     = [str(s) for s in args.seeds]
@@ -143,11 +147,11 @@ def main() -> None:
             "--budget",     *budget_str,
             "--num-graphs", str(args.num_graphs),
             "--seeds",      *seeds_str,
-            "--output-dir", ROOT / "experiments" / "eval_param_generalization" / "ba_30_50",
+            "--output-dir", ROOT / "experiments" / f"eval_param_generalization{tag}" / "ba_30_50",
         ])
 
     # ------------------------------------------------------------------
-    # Tier 1c: param sweep on large BA graphs (n∈[100,500])
+    # Tier 1c: param sweep on large BA graphs (n=100)
     # ------------------------------------------------------------------
     if not args.skip_large_ba:
         large_ba_seeds_str = [str(s) for s in args.large_ba_seeds]
@@ -168,8 +172,7 @@ def main() -> None:
             "--budget",     *budget_str,
             "--num-graphs", str(args.large_ba_num_graphs),
             "--seeds",      *large_ba_seeds_str,
-            "--output-dir", ROOT / "experiments" / "eval_param_generalization" / f"ba_{n_range_tag}",
-            "--sequential-greedy",
+            "--output-dir", ROOT / "experiments" / f"eval_param_generalization{tag}" / f"ba_{n_range_tag}",
         ])
 
     # ------------------------------------------------------------------
@@ -189,7 +192,7 @@ def main() -> None:
             "--budget",     *budget_str,
             "--num-graphs", str(args.num_graphs),
             "--seeds",      *seeds_str,
-            "--output-dir", ROOT / "experiments" / "eval_param_generalization" / "er_30_50",
+            "--output-dir", ROOT / "experiments" / f"eval_param_generalization{tag}" / "er_30_50",
         ])
 
     # ------------------------------------------------------------------
@@ -209,7 +212,7 @@ def main() -> None:
             "--budget",     *budget_str,
             "--num-graphs", str(args.num_graphs),
             "--seeds",      *seeds_str,
-            "--output-dir", ROOT / "experiments" / "eval_param_generalization" / "ws_30_50",
+            "--output-dir", ROOT / "experiments" / f"eval_param_generalization{tag}" / "ws_30_50",
         ])
 
     # ------------------------------------------------------------------
@@ -221,9 +224,9 @@ def main() -> None:
         print(f"TIER 1b — Topology ablation ({total_cells} cells)")
         print(f"{'='*60}")
         for idx, (alpha, pfail, budget) in enumerate(grid, 1):
-            tag = _cell_tag(alpha, pfail, budget)
-            out = ROOT / "experiments" / "eval_topology_ablation" / tag
-            print(f"\n[{idx}/{total_cells}] {tag}")
+            cell_tag = _cell_tag(alpha, pfail, budget)
+            out = ROOT / "experiments" / f"eval_topology_ablation{tag}" / cell_tag
+            print(f"\n[{idx}/{total_cells}] {cell_tag}")
             run([
                 "scripts/evaluate_topology_ablation.py",
                 "--checkpoint", args.checkpoint,
@@ -245,8 +248,8 @@ def main() -> None:
         print(f"TIER 2 — OOD real-world / IEEE 300-bus ({total_cells} cells)")
         print(f"{'='*60}")
         for idx, (alpha, pfail, budget) in enumerate(grid, 1):
-            tag = _cell_tag(alpha, pfail, budget)
-            out = ROOT / "experiments" / "eval_real_world" / tag
+            cell_tag = _cell_tag(alpha, pfail, budget)
+            out = ROOT / "experiments" / f"eval_real_world{tag}" / cell_tag
             print(f"\n[{idx}/{total_cells}] {tag}")
             run([
                 "scripts/evaluate_real_world.py",
@@ -268,19 +271,19 @@ def main() -> None:
         print("PLOTS — topology ablation + OOD per cell")
         print(f"{'='*60}")
         for alpha, pfail, budget in grid:
-            tag = _cell_tag(alpha, pfail, budget)
-            topo_json = ROOT / "experiments" / "eval_topology_ablation" / tag / "topology_ablation_summary.json"
-            ood_json  = ROOT / "experiments" / "eval_real_world" / tag / "ieee300" / "evaluation_summary.json"
-            out       = ROOT / "experiments" / "eval_plots" / tag
+            cell_tag = _cell_tag(alpha, pfail, budget)
+            topo_json = ROOT / "experiments" / f"eval_topology_ablation{tag}" / cell_tag / "topology_ablation_summary.json"
+            ood_json  = ROOT / "experiments" / f"eval_real_world{tag}" / cell_tag / "ieee300" / "evaluation_summary.json"
+            out       = ROOT / "experiments" / f"eval_plots{tag}" / cell_tag
             if not topo_json.exists() or not ood_json.exists():
-                print(f"  SKIP {tag}: missing result files")
+                print(f"  SKIP {cell_tag}: missing result files")
                 continue
             run([
                 "scripts/plot_evaluation_tiers.py",
                 "--topo-json", topo_json,
                 "--ood-json",  ood_json,
                 "--out-dir",   out,
-                "--tag",       tag,
+                "--tag",       cell_tag,
             ])
 
     print(f"\n{'='*60}")
